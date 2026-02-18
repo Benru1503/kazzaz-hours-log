@@ -202,9 +202,15 @@ describe('App — Auth Routing Integration', () => {
 
       render(<App />);
 
-      // Advance past the 1.5s retry delay
+      // Flush initial getSession promise
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Advance past the 1.5s retry delay and flush microtasks
       await act(async () => {
         vi.advanceTimersByTime(2000);
+        await Promise.resolve();
       });
 
       await waitFor(() => {
@@ -229,8 +235,15 @@ describe('App — Auth Routing Integration', () => {
 
       render(<App />);
 
+      // Flush initial getSession promise
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Advance past the 1.5s retry delay and flush microtasks
       await act(async () => {
         vi.advanceTimersByTime(2000);
+        await Promise.resolve();
       });
 
       await waitFor(() => {

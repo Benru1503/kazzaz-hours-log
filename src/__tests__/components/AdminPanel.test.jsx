@@ -63,7 +63,7 @@ describe('AdminPanel Component', () => {
 
       await waitFor(() => {
         expect(screen.getByText('2')).toBeInTheDocument();  // total students
-        expect(screen.getByText('1')).toBeInTheDocument();  // pending
+        expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1);  // pending (may have duplicates from mobile/desktop)
       });
     });
   });
@@ -92,8 +92,8 @@ describe('AdminPanel Component', () => {
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
       await waitFor(() => {
-        expect(screen.getByText('יוסי כהן')).toBeInTheDocument();
-        expect(screen.getByText('מיכל לוי')).toBeInTheDocument();
+        expect(screen.getAllByText('יוסי כהן').length).toBeGreaterThanOrEqual(1);  // may have duplicates from mobile/desktop
+        expect(screen.getAllByText('מיכל לוי').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -105,12 +105,12 @@ describe('AdminPanel Component', () => {
       const user = userEvent.setup();
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
-      await waitFor(() => screen.getByText('יוסי כהן'));
-      await user.click(screen.getByText('יוסי כהן'));
+      await waitFor(() => screen.getAllByText('יוסי כהן'));
+      await user.click(screen.getAllByText('יוסי כהן')[0]);  // click first match (desktop or mobile)
 
       await waitFor(() => {
         expect(screen.getByText('חזרה לרשימה')).toBeInTheDocument();
-        expect(screen.getByText('38%')).toBeInTheDocument();
+        expect(screen.getAllByText('38%').length).toBeGreaterThanOrEqual(1);  // may have duplicates
       });
     });
 
@@ -122,8 +122,8 @@ describe('AdminPanel Component', () => {
       const user = userEvent.setup();
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
-      await waitFor(() => screen.getByText('יוסי כהן'));
-      await user.click(screen.getByText('יוסי כהן'));
+      await waitFor(() => screen.getAllByText('יוסי כהן'));
+      await user.click(screen.getAllByText('יוסי כהן')[0]);  // click first match (desktop or mobile)
       await waitFor(() => screen.getByText('חזרה לרשימה'));
       await user.click(screen.getByText('חזרה לרשימה'));
 

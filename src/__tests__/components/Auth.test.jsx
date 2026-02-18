@@ -148,7 +148,7 @@ describe('Auth Component', () => {
       await user.click(screen.getByText('כניסה למערכת'));
 
       await waitFor(() => {
-        const btn = screen.getByRole('button', { name: '' }); // spinner replaces text
+        const btn = document.querySelector('button[type="submit"]'); // target submit button specifically
         expect(btn).toBeDisabled();
       });
     });
@@ -268,7 +268,7 @@ describe('Auth Component', () => {
       render(<Auth />);
       await user.click(screen.getByText('הרשמה'));
       await user.type(screen.getByPlaceholderText('ישראל ישראלי'), 'Name');
-      await user.type(screen.getByPlaceholderText('email@example.com'), 'bad');
+      await user.type(screen.getByPlaceholderText('email@example.com'), 'bad@invalid.xyz');  // valid email format
       await user.type(screen.getByPlaceholderText('••••••••'), 'pass123');
       await user.click(screen.getByText('יצירת חשבון'));
 
