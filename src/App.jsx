@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from './lib/supabase';
+import { supabase, supabaseFetch } from './lib/supabase';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
@@ -12,7 +12,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const resolved = useRef(false);
 
-  // ─── Mark loading as done (only once) ───
+  // ─── Mark loading done (only once) ───
   const resolve = (sess, prof, err) => {
     if (resolved.current) return;
     resolved.current = true;
@@ -22,51 +22,25 @@ export default function App() {
     setLoading(false);
   };
 
-  // ─── Fetch profile with timeout ───
-  const fetchProfileSafe = async (userId) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-
+  // ─── Fetch profile using raw fetch (never hangs) ───
+  const fetchProfile = async (userId) => {
     try {
-      const { data, error: fetchErr } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-        .abortSignal(controller.signal);
-
-      clearTimeout(timeout);
-
-      if (fetchErr) {
-        // Profile might not exist yet — retry once after 1.5s
-        if (fetchErr.code === 'PGRST116') {
-          await new Promise((r) => setTimeout(r, 1500));
-
-          const controller2 = new AbortController();
-          const timeout2 = setTimeout(() => controller2.abort(), 5000);
-
-          const { data: retry, error: retryErr } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single()
-            .abortSignal(controller2.signal);
-
-          clearTimeout(timeout2);
-          if (retryErr) throw retryErr;
-          return retry;
-        }
-        throw fetchErr;
+      const prof = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
+      if (!prof) {
+        // Retry once — trigger may not have fired yet
+        await new Promise((r) => setTimeout(r, 1500));
+        const retry = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
+        if (!retry) throw new Error('פרופיל לא נמצא');
+        return retry;
       }
-      return data;
+      return prof;
     } catch (err) {
-      clearTimeout(timeout);
       throw err;
     }
   };
 
   useEffect(() => {
-    // ═══ SAFETY NET: Force-resolve loading after 8 seconds no matter what ═══
+    // ═══ SAFETY NET: Force-resolve after 8 seconds ═══
     const safetyTimer = setTimeout(() => {
       if (!resolved.current) {
         console.warn('Safety timeout: forcing load resolution');
@@ -74,31 +48,22 @@ export default function App() {
       }
     }, 8000);
 
-    // ═══ PRIMARY: Try getSession first (synchronous-ish, fast) ═══
+    // ═══ PRIMARY: getSession → fetch profile ═══
     const init = async () => {
       try {
-        const { data: { session: initialSession }, error: sessErr } = await supabase.auth.getSession();
+        const { data: { session: initialSession }, error: sessErr } =
+          await supabase.auth.getSession();
 
-        if (sessErr) {
-          console.error('getSession error:', sessErr);
+        if (sessErr || !initialSession) {
           resolve(null, null, null);
           return;
         }
 
-        if (!initialSession) {
-          // No session → show login
-          resolve(null, null, null);
-          return;
-        }
-
-        // Session exists → fetch profile
         try {
-          const prof = await fetchProfileSafe(initialSession.user.id);
+          const prof = await fetchProfile(initialSession.user.id);
           resolve(initialSession, prof, null);
         } catch (profErr) {
           console.error('Profile fetch failed:', profErr);
-          // Session exists but profile failed — still let them through
-          // so they see an error screen with a retry button, not infinite loading
           resolve(initialSession, null, 'שגיאה בטעינת פרופיל המשתמש.');
         }
       } catch (err) {
@@ -109,14 +74,14 @@ export default function App() {
 
     init();
 
-    // ═══ LISTENER: Handle future auth events (login, logout, etc.) ═══
+    // ═══ LISTENER: login / logout events ═══
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         console.log('Auth event:', event);
 
         if (event === 'SIGNED_IN' && newSession?.user) {
           try {
-            const prof = await fetchProfileSafe(newSession.user.id);
+            const prof = await fetchProfile(newSession.user.id);
             setSession(newSession);
             setProfile(prof);
             setError(null);
@@ -133,7 +98,6 @@ export default function App() {
           setError(null);
           setLoading(false);
         }
-        // Ignore INITIAL_SESSION and TOKEN_REFRESHED — getSession handles initial load
       }
     );
 
@@ -155,7 +119,7 @@ export default function App() {
     setError(null);
   };
 
-  // ─── Loading (guaranteed to resolve within 8s) ───
+  // ─── Loading ───
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 page-bg" dir="rtl">
@@ -165,7 +129,7 @@ export default function App() {
     );
   }
 
-  // ─── Error with retry ───
+  // ─── Error ───
   if (error) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 page-bg" dir="rtl">
