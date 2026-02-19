@@ -311,7 +311,7 @@ export default function Dashboard({ profile, onLogout }) {
               <Clock size={17} className="text-white" />
             </div>
             <div>
-              <h1 className="text-white font-bold text-sm leading-tight">שעון נוכחות קזז</h1>
+              <h1 className="text-white font-bold text-sm leading-tight">דיווחי שעות מלגאים</h1>
               <p className="text-blue-200/35 text-xs">שלום, {profile.full_name}</p>
             </div>
           </div>
@@ -591,8 +591,8 @@ export default function Dashboard({ profile, onLogout }) {
             <p className="text-blue-200/35 text-sm mb-5">
               הוסף שעות שעבדת מחוץ למערכת. הדיווח יועבר לאישור מנהל.
             </p>
-            <form onSubmit={handleManualSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="manual-date" className="block text-blue-200/45 text-xs mb-1.5 font-medium">תאריך</label>
                   <input

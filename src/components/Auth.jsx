@@ -97,7 +97,7 @@ export default function Auth() {
           >
             <Clock size={38} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">שעון נוכחות קזז</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">דיווחי שעות מלגאי מרכז קזז</h1>
           <p className="text-blue-300/50 text-sm">מערכת מעקב שעות למלגאים · אור יהודה</p>
         </div>
 

@@ -18,7 +18,7 @@ describe('Auth Component', () => {
   describe('rendering', () => {
     it('renders the app title', () => {
       render(<Auth />);
-      expect(screen.getByText('שעון נוכחות קזז')).toBeInTheDocument();
+      expect(screen.getByText('דיווחי שעות מלגאי מרכז קזז')).toBeInTheDocument();
     });
 
     it('renders the subtitle', () => {
