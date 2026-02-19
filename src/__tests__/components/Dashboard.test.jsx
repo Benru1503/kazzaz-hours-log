@@ -189,9 +189,14 @@ describe('Dashboard Component', () => {
     it('calls ShiftLogic.checkOut when clicking checkout', async () => {
       const active = factory.activeShift();
       setupMocks({ activeShift: active });
-      ShiftLogic.checkOut.mockResolvedValue(factory.shift());
-      // Re-mock after checkout to refresh
-      ShiftLogic.getActiveShift.mockResolvedValue(null);
+      
+      // Mock checkOut to return a completed shift
+      ShiftLogic.checkOut.mockResolvedValue(factory.shift({ duration_minutes: 120 }));
+      
+      // After checkout, subsequent getActiveShift should return null
+      ShiftLogic.getActiveShift
+        .mockResolvedValueOnce(active)  // initial load
+        .mockResolvedValueOnce(null);   // after checkout refresh
 
       const user = userEvent.setup();
       render(<Dashboard profile={profile} onLogout={vi.fn()} />);
@@ -267,9 +272,17 @@ describe('Dashboard Component', () => {
       await waitFor(() => screen.getByText('דיווח ידני'));
       await user.click(screen.getByText('דיווח ידני'));
 
-      const dateInput = screen.getByLabelText('תאריך') || screen.getAllByRole('textbox')[0];
-      // Fill in the form
-      await user.type(screen.getByPlaceholderText('0'), '2');      // hours
+      // Wait for form to be ready
+      await waitFor(() => screen.getAllByPlaceholderText('0'));
+      
+      // Fill in all required fields
+      // Find the date input by type
+      const dateInput = document.querySelector('input[type="date"]');
+      await user.type(dateInput, '2026-02-14');
+      
+      // Fill hours and description
+      const inputs = screen.getAllByPlaceholderText('0');
+      await user.type(inputs[0], '2');      // hours input
       await user.type(screen.getByPlaceholderText('תאר את העבודה שביצעת...'), 'עזרה בספרייה');
 
       await user.click(screen.getByText('שלח לאישור'));
@@ -290,12 +303,22 @@ describe('Dashboard Component', () => {
 
       await waitFor(() => screen.getByText('דיווח ידני'));
       await user.click(screen.getByText('דיווח ידני'));
+      
+      // Wait for the manual log form to be visible
+      await waitFor(() => screen.getByPlaceholderText('תאר את העבודה שביצעת...'));
+      
+      // Fill in required date field  
+      const dateInput = document.querySelector('input[type="date"]');
+      await user.type(dateInput, '2026-02-14');
+      
+      // Fill in description to avoid description validation error (but leave hours/minutes empty = 0)
       await user.type(screen.getByPlaceholderText('תאר את העבודה שביצעת...'), 'test');
       await user.click(screen.getByText('שלח לאישור'));
 
+      // Toast message appears - use waitFor immediately without delay
       await waitFor(() => {
         expect(screen.getByText('נא להזין משך זמן תקין')).toBeInTheDocument();
-      });
+      }, { timeout: 1000 });
       expect(ShiftLogic.submitManualLog).not.toHaveBeenCalled();
     });
   });
