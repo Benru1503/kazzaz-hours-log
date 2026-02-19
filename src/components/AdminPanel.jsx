@@ -36,8 +36,16 @@ function ProgressRing({ progress, size = 150, sw = 11, children }) {
   const c = 2 * Math.PI * r;
   const off = c - (Math.min(progress, 100) / 100) * c;
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: size, height: size }}
+      role="progressbar"
+      aria-valuenow={Math.round(progress)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`התקדמות: ${Math.round(progress)}%`}
+    >
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none"
           stroke="rgba(255,255,255,0.06)" strokeWidth={sw} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none"
@@ -55,7 +63,14 @@ function ProgressRing({ progress, size = 150, sw = 11, children }) {
 // ─── Progress Bar ───
 function PBar({ progress, h = 8 }) {
   return (
-    <div className="w-full rounded-full overflow-hidden" style={{ height: h, background: 'rgba(255,255,255,0.07)' }}>
+    <div
+      className="w-full rounded-full overflow-hidden"
+      style={{ height: h, background: 'rgba(255,255,255,0.07)' }}
+      role="progressbar"
+      aria-valuenow={Math.round(progress)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
       <div
         className="h-full rounded-full"
         style={{
@@ -70,19 +85,71 @@ function PBar({ progress, h = 8 }) {
 
 // ─── Toast ───
 function Toast({ msg, type = 'success', onClose }) {
+  const [exiting, setExiting] = useState(false);
+
   useEffect(() => {
-    const t = setTimeout(onClose, 3500);
+    const t = setTimeout(() => setExiting(true), 3000);
     return () => clearTimeout(t);
-  }, [onClose]);
+  }, []);
+
+  useEffect(() => {
+    if (exiting) {
+      const t = setTimeout(onClose, 250);
+      return () => clearTimeout(t);
+    }
+  }, [exiting, onClose]);
+
   const bg = type === 'success' ? 'bg-emerald-500/90' : type === 'error' ? 'bg-red-500/90' : 'bg-cyan-500/90';
   const Icon = type === 'success' ? Check : type === 'error' ? X : AlertCircle;
   return (
     <div
-      className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 ${bg} text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-down`}
+      role="alert"
+      aria-live="assertive"
+      className={`fixed top-5 left-1/2 z-50 ${bg} text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-[calc(100vw-2rem)] ${exiting ? 'animate-toast-out' : 'animate-toast-in'}`}
       style={{ backdropFilter: 'blur(12px)' }}
     >
-      <Icon size={17} />
+      <Icon size={17} aria-hidden="true" />
       <span className="text-sm font-medium">{msg}</span>
+    </div>
+  );
+}
+
+// ─── Skeleton Loading ───
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen min-h-dvh page-bg safe-top" dir="rtl">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
+        <div className="flex items-center gap-3 py-3">
+          <div className="w-9 h-9 rounded-xl skeleton" />
+          <div className="space-y-1.5">
+            <div className="w-32 h-3.5 skeleton" />
+            <div className="w-20 h-2.5 skeleton" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="glass p-4 space-y-3">
+              <div className="w-20 h-2.5 skeleton" />
+              <div className="w-12 h-6 skeleton" />
+            </div>
+          ))}
+        </div>
+        <div className="h-12 rounded-xl skeleton" />
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="glass p-5 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full skeleton" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="w-24 h-3.5 skeleton" />
+                  <div className="w-16 h-2.5 skeleton" />
+                </div>
+              </div>
+              <div className="h-2 rounded-full skeleton" />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -125,7 +192,6 @@ export default function AdminPanel({ profile, onLogout }) {
     try {
       await ShiftLogic.approveLog(logId, profile.id);
       setPendingLogs((prev) => prev.filter((l) => l.id !== logId));
-      // Refresh student summaries to update their hours
       const updated = await ShiftLogic.getAllStudentsSummary();
       setStudents(updated);
       setToast({ m: 'הדיווח אושר בהצלחה ✅', t: 'success' });
@@ -153,26 +219,25 @@ export default function AdminPanel({ profile, onLogout }) {
       : 0;
   const completed = students.filter((s) => parseFloat(s.progress_percent) >= 100).length;
 
-  if (initialLoad) {
-    return (
-      <div className="min-h-screen flex items-center justify-center page-bg">
-        <Loader2 size={32} className="text-cyan-400 animate-spin" />
-      </div>
-    );
-  }
+  const ADMIN_TABS = [
+    { id: 'overview', l: 'סקירת סטודנטים',                        I: Users },
+    { id: 'pending',  l: `אישור דיווחים (${pendingLogs.length})`, I: ClipboardList },
+  ];
+
+  if (initialLoad) return <LoadingSkeleton />;
 
   return (
-    <div className="min-h-screen page-bg" dir="rtl">
+    <div className="min-h-screen min-h-dvh page-bg safe-bottom" dir="rtl">
       {toast && <Toast msg={toast.m} type={toast.t} onClose={() => setToast(null)} />}
 
       {/* ─── Header ─── */}
       <header
-        className="sticky top-0 z-40 border-b border-white/[0.04]"
+        className="sticky top-0 z-40 border-b border-white/[0.04] safe-top"
         style={{ background: 'rgba(7,11,32,0.82)', backdropFilter: 'blur(20px)' }}
       >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center gradient-admin">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center gradient-admin" aria-hidden="true">
               <Shield size={17} className="text-white" />
             </div>
             <div>
@@ -180,19 +245,21 @@ export default function AdminPanel({ profile, onLogout }) {
               <p className="text-blue-200/35 text-xs">{profile.full_name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => loadData(true)}
               disabled={refreshing}
-              className="text-blue-200/35 hover:text-cyan-300 p-2 rounded-lg hover:bg-white/5 transition-colors"
+              className="text-blue-200/35 hover:text-cyan-300 p-2 rounded-lg hover:bg-white/5 transition-colors touch-target"
               title="רענון נתונים"
+              aria-label="רענון נתונים"
             >
               <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
             </button>
             <button
               onClick={onLogout}
-              className="text-blue-200/35 hover:text-red-400 p-2 rounded-lg hover:bg-white/5 transition-colors"
+              className="text-blue-200/35 hover:text-red-400 p-2 rounded-lg hover:bg-white/5 transition-colors touch-target"
               title="יציאה"
+              aria-label="יציאה מהמערכת"
             >
               <LogOut size={17} />
             </button>
@@ -212,7 +279,7 @@ export default function AdminPanel({ profile, onLogout }) {
           ].map((s, i) => (
             <div key={i} className="glass p-4">
               <div className="flex items-center gap-2 mb-2">
-                <s.I size={15} style={{ color: s.c }} />
+                <s.I size={15} style={{ color: s.c }} aria-hidden="true" />
                 <span className="text-blue-200/40 text-xs">{s.l}</span>
               </div>
               <span className="text-2xl font-bold text-white">{s.v}</span>
@@ -221,31 +288,42 @@ export default function AdminPanel({ profile, onLogout }) {
         </div>
 
         {/* ─── Tabs ─── */}
-        <div className="flex rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.03)' }}>
-          {[
-            { id: 'overview', l: 'סקירת סטודנטים',                        I: Users },
-            { id: 'pending',  l: `אישור דיווחים (${pendingLogs.length})`, I: ClipboardList },
-          ].map((t) => (
+        <div
+          className="flex rounded-xl overflow-hidden"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+          role="tablist"
+          aria-label="תפריט ניהול"
+        >
+          {ADMIN_TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => { setTab(t.id); setSelectedStudent(null); }}
+              role="tab"
+              aria-selected={tab === t.id}
+              aria-controls={`tabpanel-${t.id}`}
+              id={`tab-${t.id}`}
               className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
                 tab === t.id
                   ? 'bg-cyan-500/12 text-cyan-300 border-b-2 border-cyan-400'
                   : 'text-blue-200/35 hover:text-blue-200/60'
               }`}
             >
-              <t.I size={15} /> {t.l}
+              <t.I size={15} aria-hidden="true" /> {t.l}
             </button>
           ))}
         </div>
 
         {/* ═══ STUDENTS TABLE ═══ */}
         {tab === 'overview' && !selectedStudent && (
-          <div className="space-y-3">
+          <div
+            className="space-y-3 animate-tab-enter"
+            role="tabpanel"
+            id="tabpanel-overview"
+            aria-labelledby="tab-overview"
+          >
             {students.length === 0 ? (
               <div className="glass p-12 text-center">
-                <Users size={40} className="text-blue-200/20 mx-auto mb-3" />
+                <Users size={40} className="text-blue-200/20 mx-auto mb-3" aria-hidden="true" />
                 <p className="text-white font-medium">אין סטודנטים רשומים עדיין</p>
                 <p className="text-blue-200/35 text-sm mt-1">סטודנטים יופיעו כאן לאחר ההרשמה</p>
               </div>
@@ -271,6 +349,10 @@ export default function AdminPanel({ profile, onLogout }) {
                     <div
                       key={s.student_id}
                       onClick={() => setSelectedStudent(s)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedStudent(s); }}}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${s.full_name}, התקדמות ${prog.toFixed(0)}%`}
                       className="glass p-5 cursor-pointer hover:border-cyan-400/25 hover:bg-white/[0.06] transition-all"
                     >
                       {/* Desktop Row */}
@@ -283,11 +365,12 @@ export default function AdminPanel({ profile, onLogout }) {
                                 prog >= 100 ? '#06b6d4' : '#8b5cf6'
                               })`,
                             }}
+                            aria-hidden="true"
                           >
                             {s.full_name?.charAt(0) || '?'}
                           </div>
-                          <div>
-                            <p className="text-white text-sm font-medium">{s.full_name}</p>
+                          <div className="min-w-0">
+                            <p className="text-white text-sm font-medium truncate">{s.full_name}</p>
                             {pending > 0 && (
                               <span className="text-amber-400/70 text-xs">
                                 {pending} ממתינים
@@ -317,18 +400,19 @@ export default function AdminPanel({ profile, onLogout }) {
                       {/* Mobile Card */}
                       <div className="md:hidden">
                         <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
                             <div
-                              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                              className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
                               style={{
                                 background: `linear-gradient(135deg, ${pColor(prog)}, #8b5cf6)`,
                               }}
+                              aria-hidden="true"
                             >
                               {s.full_name?.charAt(0) || '?'}
                             </div>
-                            <p className="text-white text-sm font-medium">{s.full_name}</p>
+                            <p className="text-white text-sm font-medium truncate">{s.full_name}</p>
                           </div>
-                          <span className="text-cyan-300 font-bold">{prog.toFixed(0)}%</span>
+                          <span className="text-cyan-300 font-bold shrink-0">{prog.toFixed(0)}%</span>
                         </div>
                         <PBar progress={prog} h={6} />
                         <div className="flex justify-between mt-2 text-xs text-blue-200/35">
@@ -357,16 +441,16 @@ export default function AdminPanel({ profile, onLogout }) {
           const totalH = parseFloat(s.total_hours || 0);
 
           return (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-tab-enter">
               <button
                 onClick={() => setSelectedStudent(null)}
-                className="flex items-center gap-2 text-blue-200/40 hover:text-cyan-300 text-sm transition-colors"
+                className="flex items-center gap-2 text-blue-200/40 hover:text-cyan-300 text-sm transition-colors touch-target"
               >
                 <ChevronLeft size={15} /> חזרה לרשימה
               </button>
               <div className="glass p-5 flex flex-col md:flex-row items-center gap-6 py-6">
                 <ProgressRing progress={prog}>
-                  <span className="text-3xl font-bold text-white">{prog.toFixed(0)}%</span>
+                  <span className="text-3xl font-bold text-white" aria-hidden="true">{prog.toFixed(0)}%</span>
                 </ProgressRing>
                 <div className="text-center md:text-right flex-1">
                   <h2 className="text-white text-2xl font-bold mb-1">{s.full_name}</h2>
@@ -391,10 +475,15 @@ export default function AdminPanel({ profile, onLogout }) {
 
         {/* ═══ PENDING APPROVALS ═══ */}
         {tab === 'pending' && (
-          <div className="space-y-3">
+          <div
+            className="space-y-3 animate-tab-enter"
+            role="tabpanel"
+            id="tabpanel-pending"
+            aria-labelledby="tab-pending"
+          >
             {pendingLogs.length === 0 ? (
               <div className="glass p-12 text-center">
-                <Check size={44} className="text-emerald-400 mx-auto mb-3 opacity-40" />
+                <Check size={44} className="text-emerald-400 mx-auto mb-3 opacity-40" aria-hidden="true" />
                 <p className="text-white font-medium">אין דיווחים ממתינים</p>
                 <p className="text-blue-200/35 text-sm mt-1">כל הדיווחים טופלו</p>
               </div>
@@ -402,28 +491,29 @@ export default function AdminPanel({ profile, onLogout }) {
               pendingLogs.map((l) => (
                 <div key={l.id} className="glass p-5">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
                         style={{ background: 'rgba(245,158,11,0.08)' }}
+                        aria-hidden="true"
                       >
                         {CATEGORIES[l.category]?.icon || '📋'}
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-white text-sm font-bold">{l.user_name}</p>
-                          <span className="text-blue-200/20 text-xs">·</span>
+                          <span className="text-blue-200/20 text-xs" aria-hidden="true">·</span>
                           <span className="text-blue-200/40 text-xs">
                             {CATEGORIES[l.category]?.label || 'אחר'}
                           </span>
                         </div>
-                        <p className="text-blue-200/60 text-sm mt-1">{l.description}</p>
+                        <p className="text-blue-200/60 text-sm mt-1 truncate">{l.description}</p>
                         <div className="flex items-center gap-3 mt-1.5 text-xs text-blue-200/35">
                           <span className="flex items-center gap-1">
-                            <Calendar size={11} /> {fmtDate(l.date)}
+                            <Calendar size={11} aria-hidden="true" /> {fmtDate(l.date)}
                           </span>
                           <span className="flex items-center gap-1">
-                            <Timer size={11} /> {fmtDur(l.duration_minutes)}
+                            <Timer size={11} aria-hidden="true" /> {fmtDur(l.duration_minutes)}
                           </span>
                         </div>
                       </div>
@@ -431,15 +521,17 @@ export default function AdminPanel({ profile, onLogout }) {
                     <div className="flex items-center gap-2 shrink-0 mr-auto md:mr-0">
                       <button
                         onClick={() => handleReject(l.id)}
-                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-red-400 text-sm font-medium border border-red-400/20 hover:bg-red-400/10 transition-all"
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-red-400 text-sm font-medium border border-red-400/20 hover:bg-red-400/10 transition-all touch-target"
+                        aria-label={`דחה דיווח של ${l.user_name}`}
                       >
-                        <X size={15} /> דחה
+                        <X size={15} aria-hidden="true" /> דחה
                       </button>
                       <button
                         onClick={() => handleApprove(l.id)}
-                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-sm font-medium transition-all hover:shadow-lg hover:shadow-emerald-500/20 gradient-success"
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-sm font-medium transition-all hover:shadow-lg hover:shadow-emerald-500/20 gradient-success touch-target"
+                        aria-label={`אשר דיווח של ${l.user_name}`}
                       >
-                        <Check size={15} /> אשר
+                        <Check size={15} aria-hidden="true" /> אשר
                       </button>
                     </div>
                   </div>

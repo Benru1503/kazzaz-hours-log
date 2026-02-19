@@ -39,8 +39,16 @@ function ProgressRing({ progress, size = 210, sw = 15, children }) {
   const c = 2 * Math.PI * r;
   const off = c - (Math.min(progress, 100) / 100) * c;
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: size, height: size }}
+      role="progressbar"
+      aria-valuenow={Math.round(progress)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`התקדמות: ${Math.round(progress)}%`}
+    >
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }} aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none"
           stroke="rgba(255,255,255,0.06)" strokeWidth={sw} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none"
@@ -69,7 +77,12 @@ function LiveTimer({ startTime }) {
   const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
   const ss = String(secs % 60).padStart(2, '0');
   return (
-    <span className="font-mono text-5xl font-bold text-cyan-300 tracking-wider" dir="ltr">
+    <span
+      className="font-mono text-5xl font-bold text-cyan-300 tracking-wider"
+      dir="ltr"
+      role="timer"
+      aria-label={`זמן משמרת: ${hh} שעות ${mm} דקות ${ss} שניות`}
+    >
       {hh}:{mm}:{ss}
     </span>
   );
@@ -77,21 +90,77 @@ function LiveTimer({ startTime }) {
 
 // ─── Toast ───
 function Toast({ msg, type = 'success', onClose }) {
+  const [exiting, setExiting] = useState(false);
+
   useEffect(() => {
-    const t = setTimeout(onClose, 3500);
+    const t = setTimeout(() => setExiting(true), 3000);
     return () => clearTimeout(t);
-  }, [onClose]);
+  }, []);
+
+  useEffect(() => {
+    if (exiting) {
+      const t = setTimeout(onClose, 250);
+      return () => clearTimeout(t);
+    }
+  }, [exiting, onClose]);
+
   const bg =
     type === 'success' ? 'bg-emerald-500/90' :
     type === 'error' ? 'bg-red-500/90' : 'bg-cyan-500/90';
   const Icon = type === 'success' ? Check : type === 'error' ? X : AlertCircle;
   return (
     <div
-      className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 ${bg} text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-slide-down`}
+      role="alert"
+      aria-live="assertive"
+      className={`fixed top-5 left-1/2 z-50 ${bg} text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 max-w-[calc(100vw-2rem)] ${exiting ? 'animate-toast-out' : 'animate-toast-in'}`}
       style={{ backdropFilter: 'blur(12px)' }}
     >
-      <Icon size={17} />
+      <Icon size={17} aria-hidden="true" />
       <span className="text-sm font-medium">{msg}</span>
+    </div>
+  );
+}
+
+// ─── Skeleton Loading ───
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen min-h-dvh page-bg safe-top" dir="rtl">
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+        {/* Header skeleton */}
+        <div className="flex items-center gap-3 py-3">
+          <div className="w-9 h-9 rounded-xl skeleton" />
+          <div className="space-y-1.5">
+            <div className="w-28 h-3.5 skeleton" />
+            <div className="w-20 h-2.5 skeleton" />
+          </div>
+        </div>
+        {/* Progress ring skeleton */}
+        <div className="glass p-5 flex justify-center py-10">
+          <div className="w-52 h-52 rounded-full skeleton" />
+        </div>
+        {/* Stats skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="glass p-4 space-y-3">
+              <div className="w-20 h-2.5 skeleton" />
+              <div className="w-12 h-6 skeleton" />
+            </div>
+          ))}
+        </div>
+        {/* Tabs skeleton */}
+        <div className="h-12 rounded-xl skeleton" />
+        {/* Content skeleton */}
+        <div className="glass p-5 space-y-4">
+          <div className="w-40 h-5 skeleton mx-auto" />
+          <div className="grid grid-cols-3 gap-2">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-16 rounded-xl skeleton" />
+            ))}
+          </div>
+          <div className="h-11 rounded-xl skeleton" />
+          <div className="h-14 rounded-2xl skeleton" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -168,7 +237,7 @@ export default function Dashboard({ profile, onLogout }) {
     try {
       const completed = await ShiftLogic.checkOut(activeShift.id);
       setActiveShift(null);
-      await loadData(); // refresh everything
+      await loadData();
       const mins = parseFloat(completed.duration_minutes || 0);
       setToast({ m: `יציאה ממשמרת! ${fmtDur(mins)} נרשמו ✅`, t: 'success' });
     } catch (err) {
@@ -218,27 +287,27 @@ export default function Dashboard({ profile, onLogout }) {
     { l: 'ממתינים',      v: progress.pendingLogs,                    I: Clock,      c: '#f59e0b' },
   ];
 
+  const TABS = [
+    { id: 'clock',   l: 'שעון נוכחות', I: Timer },
+    { id: 'history', l: 'היסטוריה',    I: ClipboardList },
+    { id: 'manual',  l: 'דיווח ידני',  I: FileText },
+  ];
+
   // ─── Loading state ───
-  if (initialLoad) {
-    return (
-      <div className="min-h-screen flex items-center justify-center page-bg">
-        <Loader2 size={32} className="text-cyan-400 animate-spin" />
-      </div>
-    );
-  }
+  if (initialLoad) return <LoadingSkeleton />;
 
   return (
-    <div className="min-h-screen page-bg" dir="rtl">
+    <div className="min-h-screen min-h-dvh page-bg safe-bottom" dir="rtl">
       {toast && <Toast msg={toast.m} type={toast.t} onClose={() => setToast(null)} />}
 
       {/* ─── Header ─── */}
       <header
-        className="sticky top-0 z-40 border-b border-white/[0.04]"
+        className="sticky top-0 z-40 border-b border-white/[0.04] safe-top"
         style={{ background: 'rgba(7,11,32,0.82)', backdropFilter: 'blur(20px)' }}
       >
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center gradient-primary">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center gradient-primary" aria-hidden="true">
               <Clock size={17} className="text-white" />
             </div>
             <div>
@@ -248,8 +317,9 @@ export default function Dashboard({ profile, onLogout }) {
           </div>
           <button
             onClick={onLogout}
-            className="text-blue-200/35 hover:text-red-400 p-2 rounded-lg hover:bg-white/5 transition-colors"
+            className="text-blue-200/35 hover:text-red-400 p-2 rounded-lg hover:bg-white/5 transition-colors touch-target"
             title="יציאה"
+            aria-label="יציאה מהמערכת"
           >
             <LogOut size={17} />
           </button>
@@ -261,16 +331,16 @@ export default function Dashboard({ profile, onLogout }) {
         {/* ─── Progress Ring ─── */}
         <div className="glass p-5 flex flex-col items-center py-8">
           <ProgressRing progress={progress.progressPercent}>
-            <span className="text-5xl font-bold text-white">
+            <span className="text-5xl font-bold text-white" aria-hidden="true">
               {Math.round(progress.progressPercent)}%
             </span>
-            <span className="text-blue-200/40 text-sm mt-1">
+            <span className="text-blue-200/40 text-sm mt-1" aria-hidden="true">
               {progress.totalHours.toFixed(1)} / {goal} שעות
             </span>
           </ProgressRing>
           {progress.progressPercent >= 100 && (
             <div className="mt-4 flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-full">
-              <Award size={17} />
+              <Award size={17} aria-hidden="true" />
               <span className="text-sm font-medium">כל הכבוד! השלמת את היעד! 🎉</span>
             </div>
           )}
@@ -281,7 +351,7 @@ export default function Dashboard({ profile, onLogout }) {
           {stats.map((s, i) => (
             <div key={i} className="glass p-4">
               <div className="flex items-center gap-2 mb-2">
-                <s.I size={15} style={{ color: s.c }} />
+                <s.I size={15} style={{ color: s.c }} aria-hidden="true" />
                 <span className="text-blue-200/40 text-xs">{s.l}</span>
               </div>
               <span className="text-2xl font-bold text-white">{s.v}</span>
@@ -290,34 +360,44 @@ export default function Dashboard({ profile, onLogout }) {
         </div>
 
         {/* ─── Tabs ─── */}
-        <div className="flex rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.03)' }}>
-          {[
-            { id: 'clock',   l: 'שעון נוכחות', I: Timer },
-            { id: 'history', l: 'היסטוריה',    I: ClipboardList },
-            { id: 'manual',  l: 'דיווח ידני',  I: FileText },
-          ].map((t) => (
+        <div
+          className="flex rounded-xl overflow-hidden"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+          role="tablist"
+          aria-label="תפריט ניווט"
+        >
+          {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
+              role="tab"
+              aria-selected={tab === t.id}
+              aria-controls={`tabpanel-${t.id}`}
+              id={`tab-${t.id}`}
               className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
                 tab === t.id
                   ? 'bg-cyan-500/12 text-cyan-300 border-b-2 border-cyan-400'
                   : 'text-blue-200/35 hover:text-blue-200/60'
               }`}
             >
-              <t.I size={15} /> {t.l}
+              <t.I size={15} aria-hidden="true" /> {t.l}
             </button>
           ))}
         </div>
 
         {/* ═══ PUNCH CLOCK TAB ═══ */}
         {tab === 'clock' && (
-          <div className="glass p-5">
+          <div
+            className="glass p-5 animate-tab-enter"
+            role="tabpanel"
+            id="tabpanel-clock"
+            aria-labelledby="tab-clock"
+          >
             {activeShift ? (
               /* ── Active Shift ── */
               <div className="text-center space-y-6 py-4">
                 <div className="inline-flex items-center gap-2 bg-emerald-400/10 text-emerald-400 px-4 py-1.5 rounded-full text-sm animate-pulse-glow">
-                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                  <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" aria-hidden="true" />
                   משמרת פעילה
                 </div>
                 <div>
@@ -353,34 +433,42 @@ export default function Dashboard({ profile, onLogout }) {
                 </div>
 
                 {/* Category Grid */}
-                <div className="grid grid-cols-3 gap-2">
-                  {Object.entries(CATEGORIES).map(([key, val]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setCategory(key)}
-                      className={`py-3 px-2 rounded-xl text-xs font-medium flex flex-col items-center gap-1.5 transition-all ${
-                        category === key
-                          ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-400/25'
-                          : 'text-blue-200/40 border border-white/[0.05] hover:border-white/[0.12]'
-                      }`}
-                    >
-                      <span className="text-lg">{val.icon}</span>
-                      {val.label}
-                    </button>
-                  ))}
-                </div>
+                <fieldset>
+                  <legend className="sr-only">בחר קטגוריה</legend>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Object.entries(CATEGORIES).map(([key, val]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setCategory(key)}
+                        aria-pressed={category === key}
+                        className={`py-3 px-2 rounded-xl text-xs font-medium flex flex-col items-center gap-1.5 transition-all ${
+                          category === key
+                            ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-400/25'
+                            : 'text-blue-200/40 border border-white/[0.05] hover:border-white/[0.12]'
+                        }`}
+                      >
+                        <span className="text-lg" aria-hidden="true">{val.icon}</span>
+                        {val.label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
 
                 {/* Task Description */}
-                <input
-                  type="text"
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                  placeholder="תיאור המשימה..."
-                  className="glass-input w-full"
-                  dir="rtl"
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleCheckIn(); }}
-                />
+                <div>
+                  <label htmlFor="task-desc" className="sr-only">תיאור המשימה</label>
+                  <input
+                    id="task-desc"
+                    type="text"
+                    value={desc}
+                    onChange={(e) => setDesc(e.target.value)}
+                    placeholder="תיאור המשימה..."
+                    className="glass-input w-full"
+                    dir="rtl"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleCheckIn(); }}
+                  />
+                </div>
 
                 {/* Check In Button */}
                 <button
@@ -402,12 +490,17 @@ export default function Dashboard({ profile, onLogout }) {
 
         {/* ═══ HISTORY TAB ═══ */}
         {tab === 'history' && (
-          <div className="space-y-3">
+          <div
+            className="space-y-3 animate-tab-enter"
+            role="tabpanel"
+            id="tabpanel-history"
+            aria-labelledby="tab-history"
+          >
             {/* Completed Shifts */}
             <h3 className="text-white font-bold mb-1">משמרות אחרונות</h3>
             {shifts.filter((s) => s.status === 'completed').length === 0 ? (
               <div className="glass p-8 text-center">
-                <Timer size={32} className="text-blue-200/20 mx-auto mb-2" />
+                <Timer size={32} className="text-blue-200/20 mx-auto mb-2" aria-hidden="true" />
                 <p className="text-blue-200/40 text-sm">עדיין אין משמרות שהושלמו</p>
               </div>
             ) : (
@@ -415,16 +508,17 @@ export default function Dashboard({ profile, onLogout }) {
                 .filter((s) => s.status === 'completed')
                 .map((sh) => (
                   <div key={sh.id} className="glass p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
                           style={{ background: 'rgba(6,182,212,0.08)' }}
+                          aria-hidden="true"
                         >
                           {CATEGORIES[sh.category]?.icon || '📋'}
                         </div>
-                        <div>
-                          <p className="text-white text-sm font-medium">
+                        <div className="min-w-0">
+                          <p className="text-white text-sm font-medium truncate">
                             {sh.task_description || 'ללא תיאור'}
                           </p>
                           <p className="text-blue-200/35 text-xs mt-0.5">
@@ -445,22 +539,23 @@ export default function Dashboard({ profile, onLogout }) {
             <h3 className="text-white font-bold mt-5 mb-1">דיווחים ידניים</h3>
             {manualLogs.length === 0 ? (
               <div className="glass p-8 text-center">
-                <FileText size={32} className="text-blue-200/20 mx-auto mb-2" />
+                <FileText size={32} className="text-blue-200/20 mx-auto mb-2" aria-hidden="true" />
                 <p className="text-blue-200/40 text-sm">עדיין אין דיווחים ידניים</p>
               </div>
             ) : (
               manualLogs.map((l) => (
                 <div key={l.id} className="glass p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
                         className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
                         style={{ background: 'rgba(139,92,246,0.08)' }}
+                        aria-hidden="true"
                       >
                         {CATEGORIES[l.category]?.icon || '📋'}
                       </div>
-                      <div>
-                        <p className="text-white text-sm font-medium">{l.description}</p>
+                      <div className="min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{l.description}</p>
                         <p className="text-blue-200/35 text-xs mt-0.5">
                           {fmtDate(l.date)} · {fmtDur(l.duration_minutes)}
                         </p>
@@ -486,7 +581,12 @@ export default function Dashboard({ profile, onLogout }) {
 
         {/* ═══ MANUAL LOG TAB ═══ */}
         {tab === 'manual' && (
-          <div className="glass p-5">
+          <div
+            className="glass p-5 animate-tab-enter"
+            role="tabpanel"
+            id="tabpanel-manual"
+            aria-labelledby="tab-manual"
+          >
             <h3 className="text-white font-bold text-lg mb-1">דיווח שעות ידני</h3>
             <p className="text-blue-200/35 text-sm mb-5">
               הוסף שעות שעבדת מחוץ למערכת. הדיווח יועבר לאישור מנהל.
@@ -494,8 +594,9 @@ export default function Dashboard({ profile, onLogout }) {
             <form onSubmit={handleManualSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-blue-200/45 text-xs mb-1.5 font-medium">תאריך</label>
+                  <label htmlFor="manual-date" className="block text-blue-200/45 text-xs mb-1.5 font-medium">תאריך</label>
                   <input
+                    id="manual-date"
                     type="date"
                     required
                     value={manualForm.date}
@@ -505,8 +606,9 @@ export default function Dashboard({ profile, onLogout }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-blue-200/45 text-xs mb-1.5 font-medium">קטגוריה</label>
+                  <label htmlFor="manual-category" className="block text-blue-200/45 text-xs mb-1.5 font-medium">קטגוריה</label>
                   <select
+                    id="manual-category"
                     value={manualForm.category}
                     onChange={(e) => setManualForm((p) => ({ ...p, category: e.target.value }))}
                     className="glass-input w-full appearance-none"
@@ -521,8 +623,9 @@ export default function Dashboard({ profile, onLogout }) {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-blue-200/45 text-xs mb-1.5 font-medium">שעות</label>
+                  <label htmlFor="manual-hours" className="block text-blue-200/45 text-xs mb-1.5 font-medium">שעות</label>
                   <input
+                    id="manual-hours"
                     type="number"
                     min="0"
                     max="24"
@@ -534,8 +637,9 @@ export default function Dashboard({ profile, onLogout }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-blue-200/45 text-xs mb-1.5 font-medium">דקות</label>
+                  <label htmlFor="manual-minutes" className="block text-blue-200/45 text-xs mb-1.5 font-medium">דקות</label>
                   <input
+                    id="manual-minutes"
                     type="number"
                     min="0"
                     max="59"
@@ -548,8 +652,9 @@ export default function Dashboard({ profile, onLogout }) {
                 </div>
               </div>
               <div>
-                <label className="block text-blue-200/45 text-xs mb-1.5 font-medium">תיאור</label>
+                <label htmlFor="manual-desc" className="block text-blue-200/45 text-xs mb-1.5 font-medium">תיאור</label>
                 <textarea
+                  id="manual-desc"
                   required
                   rows={3}
                   value={manualForm.description}

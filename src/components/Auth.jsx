@@ -26,7 +26,6 @@ export default function Auth() {
           password,
         });
         if (signInError) throw signInError;
-        // onAuthStateChange in App.jsx will handle the redirect
       } else {
         // ─── REGISTER ───
         if (!fullName.trim()) {
@@ -42,17 +41,15 @@ export default function Auth() {
           options: {
             data: {
               full_name: fullName.trim(),
-              role: 'student', // default — admin is set via SQL
+              role: 'student',
             },
           },
         });
         if (signUpError) throw signUpError;
 
         setSuccess('החשבון נוצר בהצלחה! מתחבר...');
-        // With email confirmation disabled, onAuthStateChange fires automatically
       }
     } catch (err) {
-      // Translate common Supabase errors to Hebrew
       const msg = err.message || 'שגיאה לא ידועה';
       if (msg.includes('Invalid login credentials')) {
         setError('אימייל או סיסמה שגויים');
@@ -72,11 +69,11 @@ export default function Auth() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4 page-bg"
+      className="min-h-screen min-h-dvh flex items-center justify-center p-4 page-bg safe-top safe-bottom"
       dir="rtl"
     >
       {/* Background blobs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div
           className="absolute top-20 right-20 w-72 h-72 bg-cyan-500/10 rounded-full"
           style={{ filter: 'blur(80px)' }}
@@ -96,6 +93,7 @@ export default function Auth() {
         <div className="text-center mb-8">
           <div
             className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-4 shadow-lg shadow-cyan-500/20 gradient-primary"
+            aria-hidden="true"
           >
             <Clock size={38} className="text-white" />
           </div>
@@ -109,11 +107,15 @@ export default function Auth() {
           <div
             className="flex rounded-xl overflow-hidden mb-6"
             style={{ background: 'rgba(255,255,255,0.04)' }}
+            role="tablist"
+            aria-label="כניסה או הרשמה"
           >
             {['כניסה', 'הרשמה'].map((label, i) => (
               <button
                 key={label}
                 type="button"
+                role="tab"
+                aria-selected={(i === 0 ? isLogin : !isLogin)}
                 onClick={() => {
                   setIsLogin(i === 0);
                   setError('');
@@ -132,15 +134,21 @@ export default function Auth() {
 
           {/* Error */}
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-center gap-2">
-              <AlertCircle size={15} className="shrink-0" />
+            <div
+              role="alert"
+              className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-center gap-2"
+            >
+              <AlertCircle size={15} className="shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </div>
           )}
 
           {/* Success */}
           {success && (
-            <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm">
+            <div
+              role="status"
+              className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm"
+            >
               {success}
             </div>
           )}
@@ -150,10 +158,11 @@ export default function Auth() {
             {/* Full Name (register only) */}
             {!isLogin && (
               <div>
-                <label className="block text-blue-200/50 text-xs mb-1.5 font-medium">
+                <label htmlFor="auth-name" className="block text-blue-200/50 text-xs mb-1.5 font-medium">
                   שם מלא
                 </label>
                 <input
+                  id="auth-name"
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -167,10 +176,11 @@ export default function Auth() {
 
             {/* Email */}
             <div>
-              <label className="block text-blue-200/50 text-xs mb-1.5 font-medium">
+              <label htmlFor="auth-email" className="block text-blue-200/50 text-xs mb-1.5 font-medium">
                 אימייל
               </label>
               <input
+                id="auth-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -185,11 +195,12 @@ export default function Auth() {
 
             {/* Password */}
             <div>
-              <label className="block text-blue-200/50 text-xs mb-1.5 font-medium">
+              <label htmlFor="auth-password" className="block text-blue-200/50 text-xs mb-1.5 font-medium">
                 סיסמה
               </label>
               <div className="relative">
                 <input
+                  id="auth-password"
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -204,7 +215,8 @@ export default function Auth() {
                 <button
                   type="button"
                   onClick={() => setShowPw(!showPw)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-200/30 hover:text-blue-200/60 transition-colors"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-200/30 hover:text-blue-200/60 transition-colors touch-target"
+                  aria-label={showPw ? 'הסתר סיסמה' : 'הצג סיסמה'}
                 >
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -218,7 +230,7 @@ export default function Auth() {
               className="w-full py-3.5 rounded-xl text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed gradient-primary"
             >
               {loading ? (
-                <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" role="status" aria-label="טוען..." />
               ) : isLogin ? (
                 'כניסה למערכת'
               ) : (

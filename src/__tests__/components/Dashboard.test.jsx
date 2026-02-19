@@ -50,7 +50,7 @@ describe('Dashboard Component', () => {
 
       render(<Dashboard profile={profile} onLogout={vi.fn()} />);
       // Should see the loading indicator (Loader2 spinner)
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument();
+      expect(document.querySelector('.skeleton')).toBeInTheDocument();
     });
 
     it('renders dashboard after data loads', async () => {
