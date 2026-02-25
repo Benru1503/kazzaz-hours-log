@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { login, logout, ADMIN } from './helpers';
 
 test.describe('Admin Panel', () => {
@@ -31,8 +31,8 @@ test.describe('Admin Panel', () => {
   });
 
   test('student overview tab shows by default', async ({ page }) => {
-    // Should show either student list or empty state
-    const hasStudents = page.locator('text=שעות משמרת').first();
+    // Should show either a student card (role="button" with aria-label) or empty state
+    const hasStudents = page.getByRole('button', { name: /ישראל ישראלי/ });
     const empty = page.locator('text=אין סטודנטים רשומים עדיין');
     await expect(hasStudents.or(empty)).toBeVisible({ timeout: 10_000 });
   });
