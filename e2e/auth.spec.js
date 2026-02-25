@@ -154,4 +154,45 @@ test.describe('Auth — Login & Logout', () => {
     });
     expect(isInvalid).toBe(true);
   });
+
+  test('login shows timeout error when backend hangs', async ({ page }) => {
+    // Override the auth token route to never respond (simulate hanging backend)
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    // Re-apply all mocks except auth token
+    await page.route('**/auth/v1/token?grant_type=password', async (route) => {
+      // Never fulfill — simulates a hanging Supabase
+      await new Promise((resolve) => setTimeout(resolve, 30_000));
+    });
+    // Keep other routes working
+    await page.route('**/auth/v1/user', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
+    await page.route('**/rest/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+    await page.route('**/auth/v1/logout', (route) => route.fulfill({ status: 204, body: '' }));
+    await page.route('**/supabase.co/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+
+    await page.goto('/');
+    await page.waitForSelector('input[type="email"]');
+
+    await page.fill('input[type="email"]', 'student@test.com');
+    await page.fill('input[type="password"]', 'test123456');
+    await page.click('button[type="submit"]');
+
+    // Should show timeout error within ~10s (AUTH_TIMEOUT_MS), not hang forever
+    await expect(page.locator('text=שגיאת תקשורת — נסה שוב')).toBeVisible({ timeout: 15_000 });
+
+    // Button should be re-enabled so user can retry
+    await expect(page.locator('button[type="submit"]')).toBeEnabled();
+  });
+
+  test('page refresh after login returns to dashboard or login gracefully', async ({ page }) => {
+    await login(page, STUDENT);
+    await expect(page.locator('text=שלום,')).toBeVisible({ timeout: 15_000 });
+
+    // Refresh the page
+    await page.reload();
+
+    // Should land on dashboard again OR login page — but NOT hang forever
+    const dashboard = page.locator('text=שלום,');
+    const authForm = page.locator('input[type="email"]');
+    await expect(dashboard.or(authForm)).toBeVisible({ timeout: 15_000 });
+  });
 });
