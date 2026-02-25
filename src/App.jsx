@@ -44,6 +44,9 @@ export default function App() {
     const safetyTimer = setTimeout(() => {
       if (!resolved.current) {
         console.warn('Safety timeout: forcing load resolution');
+        // Clear stale session so the Supabase client isn't locked
+        // when the user tries to log in from the Auth screen
+        supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         resolve(null, null, null);
       }
     }, 8000);
