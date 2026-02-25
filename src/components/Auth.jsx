@@ -32,6 +32,10 @@ export default function Auth() {
     setSuccess('');
 
     try {
+      // Clear any stale session that may be locking the Supabase client
+      // (e.g. after a page refresh where token refresh got stuck)
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+
       if (isLogin) {
         // ─── LOGIN ───
         const { error: signInError } = await withTimeout(
