@@ -2,6 +2,19 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Clock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
+// ─── Timeout wrapper: rejects if promise doesn't resolve within ms ───
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('__TIMEOUT__')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+const AUTH_TIMEOUT_MS = 10_000;
+
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -21,10 +34,10 @@ export default function Auth() {
     try {
       if (isLogin) {
         // ─── LOGIN ───
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error: signInError } = await withTimeout(
+          supabase.auth.signInWithPassword({ email, password }),
+          AUTH_TIMEOUT_MS,
+        );
         if (signInError) throw signInError;
       } else {
         // ─── REGISTER ───
@@ -35,23 +48,28 @@ export default function Auth() {
           throw new Error('הסיסמה חייבת להכיל לפחות 6 תווים');
         }
 
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName.trim(),
-              role: 'student',
+        const { error: signUpError } = await withTimeout(
+          supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: fullName.trim(),
+                role: 'student',
+              },
             },
-          },
-        });
+          }),
+          AUTH_TIMEOUT_MS,
+        );
         if (signUpError) throw signUpError;
 
         setSuccess('החשבון נוצר בהצלחה! מתחבר...');
       }
     } catch (err) {
       const msg = err.message || 'שגיאה לא ידועה';
-      if (msg.includes('Invalid login credentials')) {
+      if (msg === '__TIMEOUT__') {
+        setError('שגיאת תקשורת — נסה שוב');
+      } else if (msg.includes('Invalid login credentials')) {
         setError('אימייל או סיסמה שגויים');
       } else if (msg.includes('User already registered')) {
         setError('משתמש עם אימייל זה כבר קיים');
