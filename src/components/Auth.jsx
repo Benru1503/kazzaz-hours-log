@@ -15,7 +15,7 @@ function withTimeout(promise, ms) {
 
 const AUTH_TIMEOUT_MS = 10_000;
 
-export default function Auth() {
+export default function Auth({ onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,9 +32,14 @@ export default function Auth() {
     setSuccess('');
 
     try {
-      // Clear any stale session that may be locking the Supabase client
-      // (e.g. after a page refresh where token refresh got stuck)
-      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      // Clear any stale session that may be locking the Supabase client.
+      // Use a 2-second timeout to prevent hanging if the Supabase client's
+      // internal navigator lock is held by a concurrent operation (e.g. a
+      // still-pending getSession from App init after page refresh).
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise((r) => setTimeout(r, 2000)),
+      ]).catch(() => {});
 
       if (isLogin) {
         // ─── LOGIN ───
@@ -43,6 +48,10 @@ export default function Auth() {
           AUTH_TIMEOUT_MS,
         );
         if (signInError) throw signInError;
+        // Notify parent as fallback — if onAuthStateChange doesn't fire
+        // SIGNED_IN (e.g. due to lock contention), App can re-check the
+        // session via getSession() and transition to the dashboard.
+        onAuthSuccess?.();
       } else {
         // ─── REGISTER ───
         if (!fullName.trim()) {

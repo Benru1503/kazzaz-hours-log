@@ -12,94 +12,117 @@ export default function App() {
   const [error, setError] = useState(null);
   const resolved = useRef(false);
 
-  // ─── Mark loading done (only once) ───
+  // ─── Mark initial loading done (only once) ───
   const resolve = (sess, prof, err) => {
     if (resolved.current) return;
     resolved.current = true;
-    if (sess) setSession(sess);
-    if (prof) setProfile(prof);
-    if (err) setError(err);
+    setSession(sess ?? null);
+    setProfile(prof ?? null);
+    setError(err ?? null);
     setLoading(false);
   };
 
   // ─── Fetch profile using raw fetch (never hangs) ───
   const fetchProfile = async (userId) => {
+    const prof = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
+    if (!prof) {
+      // Retry once — trigger may not have fired yet
+      await new Promise((r) => setTimeout(r, 1500));
+      const retry = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
+      if (!retry) throw new Error('פרופיל לא נמצא');
+      return retry;
+    }
+    return prof;
+  };
+
+  // ─── Fallback: re-check session after explicit login ───
+  // Called by Auth component if the onAuthStateChange listener doesn't fire
+  const recheckSession = async () => {
     try {
-      const prof = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
-      if (!prof) {
-        // Retry once — trigger may not have fired yet
-        await new Promise((r) => setTimeout(r, 1500));
-        const retry = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
-        if (!retry) throw new Error('פרופיל לא נמצא');
-        return retry;
+      const { data: { session: s } } = await supabase.auth.getSession();
+      if (s?.user) {
+        const prof = await fetchProfile(s.user.id);
+        setSession(s);
+        setProfile(prof);
+        setError(null);
+        setLoading(false);
       }
-      return prof;
     } catch (err) {
-      throw err;
+      console.error('Session recheck failed:', err);
     }
   };
 
   useEffect(() => {
+    // Version counter to discard stale profile fetches when events overlap
+    let fetchVersion = 0;
+
     // ═══ SAFETY NET: Force-resolve after 8 seconds ═══
     const safetyTimer = setTimeout(() => {
       if (!resolved.current) {
         console.warn('Safety timeout: forcing load resolution');
-        // Clear stale session so the Supabase client isn't locked
-        // when the user tries to log in from the Auth screen
         supabase.auth.signOut({ scope: 'local' }).catch(() => {});
         resolve(null, null, null);
       }
     }, 8000);
 
-    // ═══ PRIMARY: getSession → fetch profile ═══
-    const init = async () => {
-      try {
-        const { data: { session: initialSession }, error: sessErr } =
-          await supabase.auth.getSession();
-
-        if (sessErr || !initialSession) {
-          resolve(null, null, null);
-          return;
-        }
-
-        try {
-          const prof = await fetchProfile(initialSession.user.id);
-          resolve(initialSession, prof, null);
-        } catch (profErr) {
-          console.error('Profile fetch failed:', profErr);
-          resolve(initialSession, null, 'שגיאה בטעינת פרופיל המשתמש.');
-        }
-      } catch (err) {
-        console.error('Init error:', err);
-        resolve(null, null, null);
-      }
-    };
-
-    init();
-
-    // ═══ LISTENER: login / logout events ═══
+    // ═══ LISTENER: Handle ALL auth state changes ═══
+    // Set up BEFORE any getSession call (Supabase v2 best practice).
+    // Supabase v2 fires INITIAL_SESSION immediately, which replaces
+    // the old init() + getSession() pattern and eliminates the race
+    // condition between init and the listener.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         console.log('Auth event:', event);
+        const myVersion = ++fetchVersion;
 
+        // ── Initial session (persisted from localStorage after refresh) ──
+        if (event === 'INITIAL_SESSION') {
+          if (newSession?.user) {
+            try {
+              const prof = await fetchProfile(newSession.user.id);
+              if (myVersion !== fetchVersion) return;
+              resolve(newSession, prof, null);
+            } catch (err) {
+              if (myVersion !== fetchVersion) return;
+              console.error('Profile fetch failed (initial):', err);
+              resolve(newSession, null, 'שגיאה בטעינת פרופיל המשתמש.');
+            }
+          } else {
+            resolve(null, null, null);
+          }
+          return;
+        }
+
+        // ── User signed in ──
         if (event === 'SIGNED_IN' && newSession?.user) {
           try {
             const prof = await fetchProfile(newSession.user.id);
+            if (myVersion !== fetchVersion) return;
             setSession(newSession);
             setProfile(prof);
             setError(null);
-            setLoading(false);
           } catch (err) {
+            if (myVersion !== fetchVersion) return;
             setSession(newSession);
             setProfile(null);
             setError('שגיאה בטעינת פרופיל המשתמש.');
-            setLoading(false);
           }
-        } else if (event === 'SIGNED_OUT') {
+          setLoading(false);
+          return;
+        }
+
+        // ── User signed out ──
+        if (event === 'SIGNED_OUT') {
           setSession(null);
           setProfile(null);
           setError(null);
           setLoading(false);
+          return;
+        }
+
+        // ── Token refreshed (just update session, don't re-fetch profile) ──
+        if (event === 'TOKEN_REFRESHED' && newSession) {
+          setSession(newSession);
         }
       }
     );
@@ -159,7 +182,7 @@ export default function App() {
 
   // ─── Not logged in ───
   if (!session || !profile) {
-    return <Auth />;
+    return <Auth onAuthSuccess={recheckSession} />;
   }
 
   // ─── Route by role ───

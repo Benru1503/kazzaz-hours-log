@@ -263,10 +263,11 @@ describe('App — Auth Routing Integration', () => {
         error: null,
       });
 
-      // Capture the auth callback
+      // Capture the auth callback and fire INITIAL_SESSION with no session
       let authCallback;
       supabase.auth.onAuthStateChange.mockImplementation((cb) => {
         authCallback = cb;
+        Promise.resolve().then(() => cb('INITIAL_SESSION', null));
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       });
 
@@ -299,6 +300,8 @@ describe('App — Auth Routing Integration', () => {
       let authCallback;
       supabase.auth.onAuthStateChange.mockImplementation((cb) => {
         authCallback = cb;
+        // Fire INITIAL_SESSION with persisted session so Dashboard renders
+        Promise.resolve().then(() => cb('INITIAL_SESSION', session));
         return { data: { subscription: { unsubscribe: vi.fn() } } };
       });
 
