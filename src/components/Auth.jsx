@@ -32,15 +32,6 @@ export default function Auth({ onAuthSuccess }) {
     setSuccess('');
 
     try {
-      // Clear any stale session that may be locking the Supabase client.
-      // Use a 2-second timeout to prevent hanging if the Supabase client's
-      // internal navigator lock is held by a concurrent operation (e.g. a
-      // still-pending getSession from App init after page refresh).
-      await Promise.race([
-        supabase.auth.signOut({ scope: 'local' }),
-        new Promise((r) => setTimeout(r, 2000)),
-      ]).catch(() => {});
-
       if (isLogin) {
         // ─── LOGIN ───
         const { error: signInError } = await withTimeout(

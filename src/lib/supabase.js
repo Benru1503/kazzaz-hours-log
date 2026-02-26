@@ -18,6 +18,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+    // Disable the navigator lock. Supabase uses navigator.locks to
+    // serialise session operations across tabs, but a slow token refresh
+    // can hold the lock for seconds, causing every subsequent SDK call
+    // (getSession, signOut, signInWithPassword) to queue behind it.
+    // For this single-page app the lock isn't needed and removing it
+    // eliminates the entire class of post-refresh hangs.
+    lock: async (_name, _acquireTimeout, fn) => fn(),
   },
 });
 
