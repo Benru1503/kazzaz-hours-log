@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 .env
+.env.local
+.env.*
+.vercel
 .env.test
 .claude/
 
@@ -31,3 +34,5 @@ playwright/.cache/
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env*.local
