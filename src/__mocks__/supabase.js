@@ -16,11 +16,23 @@ export const supabase = {
       error: null,
     }),
     signOut: vi.fn().mockResolvedValue({ error: null }),
-    onAuthStateChange: vi.fn().mockReturnValue({
-      data: { subscription: { unsubscribe: vi.fn() } },
-    }),
+    onAuthStateChange: vi.fn(),
   },
 };
+
+// ─── Default onAuthStateChange: simulate Supabase v2 INITIAL_SESSION ───
+// Supabase v2 fires INITIAL_SESSION immediately when the listener is set up,
+// passing the persisted session (or null). We replicate this by reading the
+// session from the getSession mock.
+function setupDefaultAuthStateChange() {
+  supabase.auth.onAuthStateChange.mockImplementation((cb) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      cb('INITIAL_SESSION', session);
+    });
+    return { data: { subscription: { unsubscribe: vi.fn() } } };
+  });
+}
+setupDefaultAuthStateChange();
 
 // ─── Mock fetch helpers ───
 export const supabaseFetch = vi.fn();
@@ -33,7 +45,7 @@ export function resetAllMocks() {
   supabase.auth.signInWithPassword.mockResolvedValue({ data: { session: { user: { id: 'user-123' } } }, error: null });
   supabase.auth.signUp.mockResolvedValue({ data: { session: { user: { id: 'user-123' } } }, error: null });
   supabase.auth.signOut.mockResolvedValue({ error: null });
-  supabase.auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+  setupDefaultAuthStateChange();
   supabaseFetch.mockReset();
   supabaseRpc.mockReset();
 }
