@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .env
 .env.test
+.claude/
 
 # Playwright
 test-results/
