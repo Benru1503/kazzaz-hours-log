@@ -142,6 +142,10 @@
     background: linear-gradient(135deg, #f59e0b, #ef4444);
   }
 
+  .gradient-supervisor {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+  }
+
   .page-bg {
     background: linear-gradient(135deg, #070b20 0%, #0b1340 35%, #0d1838 65%, #08102c 100%);
   }

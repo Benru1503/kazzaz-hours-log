@@ -12,6 +12,9 @@ vi.mock('../../lib/ShiftLogic', () => ({
     checkIn: vi.fn(),
     checkOut: vi.fn(),
     submitManualLog: vi.fn(),
+    getStudentPlacement: vi.fn(),
+    getActiveEvents: vi.fn(),
+    notifySupervisor: vi.fn(),
   },
 }));
 
@@ -31,6 +34,9 @@ function setupMocks(overrides = {}) {
   ShiftLogic.getShifts.mockResolvedValue(overrides.shifts ?? []);
   ShiftLogic.getManualLogs.mockResolvedValue(overrides.logs ?? []);
   ShiftLogic.calculateProgress.mockResolvedValue(overrides.progress ?? defaultProgress);
+  ShiftLogic.getStudentPlacement.mockResolvedValue(overrides.placement ?? null);
+  ShiftLogic.getActiveEvents.mockResolvedValue(overrides.events ?? []);
+  ShiftLogic.notifySupervisor.mockResolvedValue(undefined);
 }
 
 describe('Dashboard Component', () => {
@@ -47,6 +53,8 @@ describe('Dashboard Component', () => {
       ShiftLogic.getShifts.mockImplementation(() => new Promise(() => {}));
       ShiftLogic.getManualLogs.mockImplementation(() => new Promise(() => {}));
       ShiftLogic.calculateProgress.mockImplementation(() => new Promise(() => {}));
+      ShiftLogic.getStudentPlacement.mockImplementation(() => new Promise(() => {}));
+      ShiftLogic.getActiveEvents.mockImplementation(() => new Promise(() => {}));
 
       render(<Dashboard profile={profile} onLogout={vi.fn()} />);
       // Should see the loading indicator (Loader2 spinner)
@@ -152,7 +160,8 @@ describe('Dashboard Component', () => {
         expect(ShiftLogic.checkIn).toHaveBeenCalledWith(
           'user-123',
           'tutoring', // default category
-          'חונכות מתמטיקה'
+          'חונכות מתמטיקה',
+          null, // siteId (no placement)
         );
       });
     });
@@ -252,9 +261,9 @@ describe('Dashboard Component', () => {
       await waitFor(() => screen.getByText('היסטוריה'));
       await user.click(screen.getByText('היסטוריה'));
 
-      expect(screen.getByText('אושר ✓')).toBeInTheDocument();
+      expect(screen.getByText('אושר')).toBeInTheDocument();
       expect(screen.getByText('ממתין...')).toBeInTheDocument();
-      expect(screen.getByText('נדחה ✗')).toBeInTheDocument();
+      expect(screen.getAllByText('נדחה').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -361,6 +370,102 @@ describe('Dashboard Component', () => {
       await user.click(screen.getByTitle('יציאה'));
 
       expect(onLogout).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // SITE PLACEMENT
+  // ═══════════════════════════════════════════
+  describe('site placement', () => {
+    it('shows site assignment info when student has placement', async () => {
+      setupMocks({
+        placement: { site_id: 'site-1', sites: { id: 'site-1', name: 'בית ספר הדר' } },
+      });
+      render(<Dashboard profile={profile} onLogout={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('בית ספר הדר')).toBeInTheDocument();
+      });
+    });
+
+    it('shows unplaced message when student has no placement', async () => {
+      setupMocks({ placement: null });
+      render(<Dashboard profile={profile} onLogout={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/לא שובצת/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // EVENT SELECTION
+  // ═══════════════════════════════════════════
+  describe('event selection', () => {
+    it('shows event dropdown when event log type selected', async () => {
+      setupMocks({
+        events: [{ id: 'evt-1', name: 'יום מעשים טובים' }],
+      });
+
+      const user = userEvent.setup();
+      render(<Dashboard profile={profile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('דיווח ידני'));
+      await user.click(screen.getByText('דיווח ידני'));
+
+      await waitFor(() => screen.getByText('אירוע כללי'));
+      await user.click(screen.getByText('אירוע כללי'));
+
+      await waitFor(() => {
+        expect(screen.getByText('בחר אירוע')).toBeInTheDocument();
+        expect(screen.getByText(/יום מעשים טובים/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows site info when site log type is selected', async () => {
+      setupMocks({
+        placement: { site_id: 'site-1', sites: { id: 'site-1', name: 'בית ספר הדר' } },
+      });
+
+      const user = userEvent.setup();
+      render(<Dashboard profile={profile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('דיווח ידני'));
+      await user.click(screen.getByText('דיווח ידני'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/שעות ידווחו תחת/)).toBeInTheDocument();
+        expect(screen.getAllByText('בית ספר הדר').length).toBeGreaterThanOrEqual(1);
+      });
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // CHECK IN WITH SITE
+  // ═══════════════════════════════════════════
+  describe('checkIn with site', () => {
+    it('passes siteId to checkIn when student has placement', async () => {
+      setupMocks({
+        placement: { site_id: 'site-1', sites: { id: 'site-1', name: 'בית ספר הדר' } },
+      });
+      ShiftLogic.checkIn.mockResolvedValue(factory.activeShift());
+
+      const user = userEvent.setup();
+      render(<Dashboard profile={profile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByPlaceholderText('תיאור המשימה...'));
+
+      await user.type(screen.getByPlaceholderText('תיאור המשימה...'), 'חונכות מתמטיקה');
+      await user.click(screen.getByText('כניסה למשמרת'));
+
+      await waitFor(() => {
+        expect(ShiftLogic.checkIn).toHaveBeenCalledWith(
+          'user-123',
+          'tutoring',
+          'חונכות מתמטיקה',
+          'site-1',
+        );
+      });
     });
   });
 });

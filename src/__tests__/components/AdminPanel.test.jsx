@@ -9,6 +9,20 @@ vi.mock('../../lib/ShiftLogic', () => ({
     getAllPendingLogs: vi.fn(),
     approveLog: vi.fn(),
     rejectLog: vi.fn(),
+    getAllSites: vi.fn(),
+    getAllEvents: vi.fn(),
+    getAllSupervisors: vi.fn(),
+    getActiveSites: vi.fn(),
+    getAllPlacements: vi.fn(),
+    createSite: vi.fn(),
+    createEvent: vi.fn(),
+    createSupervisorAccount: vi.fn(),
+    createPlacement: vi.fn(),
+    deactivateSite: vi.fn(),
+    deactivateEvent: vi.fn(),
+    assignSupervisorToSite: vi.fn(),
+    removeSupervisorFromSite: vi.fn(),
+    getSiteSupervisors: vi.fn(),
   },
 }));
 
@@ -21,6 +35,11 @@ const adminProfile = factory.adminProfile();
 function setupMocks(overrides = {}) {
   ShiftLogic.getAllStudentsSummary.mockResolvedValue(overrides.students ?? []);
   ShiftLogic.getAllPendingLogs.mockResolvedValue(overrides.pending ?? []);
+  ShiftLogic.getAllSites.mockResolvedValue(overrides.sites ?? []);
+  ShiftLogic.getAllEvents.mockResolvedValue(overrides.events ?? []);
+  ShiftLogic.getAllSupervisors.mockResolvedValue(overrides.supervisors ?? []);
+  ShiftLogic.getActiveSites.mockResolvedValue(overrides.activeSites ?? []);
+  ShiftLogic.getAllPlacements.mockResolvedValue(overrides.placements ?? []);
 }
 
 describe('AdminPanel Component', () => {
@@ -141,8 +160,8 @@ describe('AdminPanel Component', () => {
       const user = userEvent.setup();
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
-      await waitFor(() => screen.getByText(/אישור דיווחים/));
-      await user.click(screen.getByText(/אישור דיווחים/));
+      await waitFor(() => screen.getByText(/אישורים/));
+      await user.click(screen.getByText(/אישורים/));
 
       expect(screen.getByText('אין דיווחים ממתינים')).toBeInTheDocument();
     });
@@ -163,8 +182,8 @@ describe('AdminPanel Component', () => {
       const user = userEvent.setup();
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
-      await waitFor(() => screen.getByText(/אישור דיווחים/));
-      await user.click(screen.getByText(/אישור דיווחים/));
+      await waitFor(() => screen.getByText(/אישורים/));
+      await user.click(screen.getByText(/אישורים/));
 
       expect(screen.getByText('יוסי כהן')).toBeInTheDocument();
       expect(screen.getByText('חונכות פיזיקה')).toBeInTheDocument();
@@ -185,8 +204,8 @@ describe('AdminPanel Component', () => {
       const user = userEvent.setup();
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
-      await waitFor(() => screen.getByText(/אישור דיווחים/));
-      await user.click(screen.getByText(/אישור דיווחים/));
+      await waitFor(() => screen.getByText(/אישורים/));
+      await user.click(screen.getByText(/אישורים/));
       await user.click(screen.getByText('אשר'));
 
       await waitFor(() => {
@@ -206,8 +225,8 @@ describe('AdminPanel Component', () => {
       const user = userEvent.setup();
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
-      await waitFor(() => screen.getByText(/אישור דיווחים/));
-      await user.click(screen.getByText(/אישור דיווחים/));
+      await waitFor(() => screen.getByText(/אישורים/));
+      await user.click(screen.getByText(/אישורים/));
       await user.click(screen.getByText('דחה'));
 
       await waitFor(() => {
@@ -228,8 +247,8 @@ describe('AdminPanel Component', () => {
       const user = userEvent.setup();
       render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
 
-      await waitFor(() => screen.getByText(/אישור דיווחים/));
-      await user.click(screen.getByText(/אישור דיווחים/));
+      await waitFor(() => screen.getByText(/אישורים/));
+      await user.click(screen.getByText(/אישורים/));
       expect(screen.getByText('Only Log')).toBeInTheDocument();
 
       await user.click(screen.getByText('אשר'));
@@ -255,6 +274,77 @@ describe('AdminPanel Component', () => {
       await user.click(screen.getByTitle('יציאה'));
 
       expect(onLogout).toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // MANAGEMENT TAB
+  // ═══════════════════════════════════════════
+  describe('management tab', () => {
+    it('shows management tab', async () => {
+      setupMocks();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('ניהול')).toBeInTheDocument();
+      });
+    });
+
+    it('navigates to management tab', async () => {
+      setupMocks({
+        sites: [{ id: 'site-1', name: 'אתר א', is_active: true }],
+        events: [{ id: 'evt-1', name: 'אירוע א', is_active: true }],
+      });
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/אתרי התנדבות/)).toBeInTheDocument();
+        expect(screen.getByText(/מפקחי אתרים/)).toBeInTheDocument();
+        expect(screen.getByText(/אירועים כלליים/)).toBeInTheDocument();
+        expect(screen.getAllByText(/שיבוצים/).length).toBeGreaterThanOrEqual(1);
+      });
+    });
+
+    it('shows site list in management', async () => {
+      setupMocks({
+        sites: [
+          { id: 'site-1', name: 'בית ספר הדר', address: 'רחוב הרצל 5', is_active: true },
+          { id: 'site-2', name: 'מרכז קהילתי', address: 'רחוב בן גוריון 10', is_active: true },
+        ],
+      });
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => {
+        expect(screen.getByText('בית ספר הדר')).toBeInTheDocument();
+        expect(screen.getByText('מרכז קהילתי')).toBeInTheDocument();
+      });
+    });
+
+    it('shows event list in management', async () => {
+      setupMocks({
+        events: [
+          { id: 'evt-1', name: 'יום מעשים טובים', is_active: true, event_date: '2026-03-15' },
+          { id: 'evt-2', name: 'מבצע חורף', is_active: true, event_date: '2026-01-20' },
+        ],
+      });
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => {
+        expect(screen.getByText('יום מעשים טובים')).toBeInTheDocument();
+        expect(screen.getByText('מבצע חורף')).toBeInTheDocument();
+      });
     });
   });
 });

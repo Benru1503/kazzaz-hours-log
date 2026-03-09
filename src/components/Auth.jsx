@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Clock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Clock, AlertCircle, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
 
 // ─── Timeout wrapper: rejects if promise doesn't resolve within ms ───
 function withTimeout(promise, ms) {
@@ -17,6 +17,7 @@ const AUTH_TIMEOUT_MS = 10_000;
 
 export default function Auth({ onAuthSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
+  const [adminMode, setAdminMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -114,45 +115,53 @@ export default function Auth({ onAuthSuccess }) {
         {/* Logo & Title */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-4 shadow-lg shadow-cyan-500/20 gradient-primary"
+            className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-4 shadow-lg ${
+              adminMode ? 'shadow-amber-500/20 gradient-admin' : 'shadow-cyan-500/20 gradient-primary'
+            }`}
             aria-hidden="true"
           >
-            <Clock size={38} className="text-white" />
+            {adminMode ? <Shield size={38} className="text-white" /> : <Clock size={38} className="text-white" />}
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">דיווחי שעות מלגאי מרכז קזז</h1>
-          <p className="text-blue-300/50 text-sm">מערכת מעקב שעות למלגאים · אור יהודה</p>
+          <h1 className="text-3xl font-bold text-white mb-2">
+            {adminMode ? 'כניסת מנהל / מפקח' : 'דיווחי שעות מלגאי מרכז קזז'}
+          </h1>
+          <p className="text-blue-300/50 text-sm">
+            {adminMode ? 'כניסה למערכת הניהול' : 'מערכת מעקב שעות למלגאים · אור יהודה'}
+          </p>
         </div>
 
         {/* Card */}
         <div className="glass p-6">
-          {/* Toggle */}
-          <div
-            className="flex rounded-xl overflow-hidden mb-6"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
-            role="tablist"
-            aria-label="כניסה או הרשמה"
-          >
-            {['כניסה', 'הרשמה'].map((label, i) => (
-              <button
-                key={label}
-                type="button"
-                role="tab"
-                aria-selected={(i === 0 ? isLogin : !isLogin)}
-                onClick={() => {
-                  setIsLogin(i === 0);
-                  setError('');
-                  setSuccess('');
-                }}
-                className={`flex-1 py-3 text-sm font-medium transition-all ${
-                  (i === 0 ? isLogin : !isLogin)
-                    ? 'bg-cyan-500/15 text-cyan-300'
-                    : 'text-blue-200/40 hover:text-blue-200/70'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Toggle (hidden in admin mode — admin/supervisor can only login) */}
+          {!adminMode && (
+            <div
+              className="flex rounded-xl overflow-hidden mb-6"
+              style={{ background: 'rgba(255,255,255,0.04)' }}
+              role="tablist"
+              aria-label="כניסה או הרשמה"
+            >
+              {['כניסה', 'הרשמה'].map((label, i) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="tab"
+                  aria-selected={(i === 0 ? isLogin : !isLogin)}
+                  onClick={() => {
+                    setIsLogin(i === 0);
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className={`flex-1 py-3 text-sm font-medium transition-all ${
+                    (i === 0 ? isLogin : !isLogin)
+                      ? 'bg-cyan-500/15 text-cyan-300'
+                      : 'text-blue-200/40 hover:text-blue-200/70'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -177,8 +186,8 @@ export default function Auth({ onAuthSuccess }) {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Full Name (register only) */}
-            {!isLogin && (
+            {/* Full Name (register only, hidden in admin mode) */}
+            {!isLogin && !adminMode && (
               <div>
                 <label htmlFor="auth-name" className="block text-blue-200/50 text-xs mb-1.5 font-medium">
                   שם מלא
@@ -249,10 +258,16 @@ export default function Auth({ onAuthSuccess }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 rounded-xl text-white font-semibold text-sm transition-all hover:shadow-lg hover:shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed gradient-primary"
+              className={`w-full py-3.5 rounded-xl text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                adminMode
+                  ? 'gradient-admin hover:shadow-lg hover:shadow-amber-500/20'
+                  : 'gradient-primary hover:shadow-lg hover:shadow-cyan-500/20'
+              }`}
             >
               {loading ? (
                 <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" role="status" aria-label="טוען..." />
+              ) : adminMode ? (
+                'כניסה למערכת ניהול'
               ) : isLogin ? (
                 'כניסה למערכת'
               ) : (
@@ -260,6 +275,36 @@ export default function Auth({ onAuthSuccess }) {
               )}
             </button>
           </form>
+
+          {/* Admin/Supervisor login toggle */}
+          {!adminMode ? (
+            <button
+              type="button"
+              onClick={() => {
+                setAdminMode(true);
+                setIsLogin(true);
+                setError('');
+                setSuccess('');
+              }}
+              className="mt-4 w-full flex items-center justify-center gap-2 text-blue-200/30 hover:text-amber-400/70 text-xs font-medium transition-colors py-2"
+            >
+              <Shield size={13} />
+              כניסת מנהל / מפקח אתר
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setAdminMode(false);
+                setError('');
+                setSuccess('');
+              }}
+              className="mt-4 w-full flex items-center justify-center gap-2 text-blue-200/30 hover:text-cyan-300/70 text-xs font-medium transition-colors py-2"
+            >
+              <ArrowRight size={13} />
+              חזרה לכניסת סטודנט
+            </button>
+          )}
         </div>
       </div>
     </div>
