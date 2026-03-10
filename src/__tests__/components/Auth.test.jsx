@@ -3,13 +3,20 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('../../lib/supabase', () => import('../../__mocks__/supabase'));
+vi.mock('../../lib/ShiftLogic', () => ({
+  ShiftLogic: {
+    checkApprovedEmail: vi.fn().mockResolvedValue(true),
+  },
+}));
 
 import Auth from '../../components/Auth';
 import { supabase, resetAllMocks } from '../../__mocks__/supabase';
+import { ShiftLogic } from '../../lib/ShiftLogic';
 
 describe('Auth Component', () => {
   beforeEach(() => {
     resetAllMocks();
+    ShiftLogic.checkApprovedEmail.mockResolvedValue(true);
   });
 
   // ═══════════════════════════════════════════
