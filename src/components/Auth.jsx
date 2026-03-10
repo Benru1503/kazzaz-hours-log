@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseFetch } from '../lib/supabase';
 import { Clock, AlertCircle, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
 
 // ─── Timeout wrapper: rejects if promise doesn't resolve within ms ───
@@ -35,11 +35,28 @@ export default function Auth({ onAuthSuccess }) {
     try {
       if (isLogin) {
         // ─── LOGIN ───
-        const { error: signInError } = await withTimeout(
+        const { data: signInData, error: signInError } = await withTimeout(
           supabase.auth.signInWithPassword({ email, password }),
           AUTH_TIMEOUT_MS,
         );
         if (signInError) throw signInError;
+
+        // ─── Role check: ensure user is using the correct login form ───
+        const userId = signInData?.user?.id;
+        if (userId) {
+          const profile = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
+          const role = profile?.role || 'student';
+
+          if (adminMode && role === 'student') {
+            await supabase.auth.signOut();
+            throw new Error('חשבון זה הוא חשבון סטודנט. השתמש בכניסה הרגילה.');
+          }
+          if (!adminMode && (role === 'admin' || role === 'site_supervisor')) {
+            await supabase.auth.signOut();
+            throw new Error('חשבון זה הוא חשבון מנהל/מפקח. השתמש בכניסת מנהל.');
+          }
+        }
+
         // Notify parent as fallback — if onAuthStateChange doesn't fire
         // SIGNED_IN (e.g. due to lock contention), App can re-check the
         // session via getSession() and transition to the dashboard.
