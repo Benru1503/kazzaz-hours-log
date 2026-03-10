@@ -3,7 +3,7 @@ import { ShiftLogic } from '../lib/ShiftLogic';
 import {
   Clock, LogIn, LogOut, Plus, Timer, FileText,
   TrendingUp, Award, ClipboardList, AlertCircle,
-  Check, X, Loader2
+  Check, X, Loader2, MapPin, CalendarDays
 } from 'lucide-react';
 
 // ─── Helpers ───
@@ -179,8 +179,11 @@ export default function Dashboard({ profile, onLogout }) {
   const [tab, setTab] = useState('clock');
   const [category, setCategory] = useState('tutoring');
   const [desc, setDesc] = useState('');
+  const [placement, setPlacement] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [logType, setLogType] = useState('site'); // 'site' or 'event'
   const [manualForm, setManualForm] = useState({
-    date: '', hours: '', minutes: '', description: '', category: 'other',
+    date: '', hours: '', minutes: '', description: '', category: 'other', eventId: '',
   });
   const [toast, setToast] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -191,16 +194,20 @@ export default function Dashboard({ profile, onLogout }) {
   // ─── Load all data ───
   const loadData = useCallback(async () => {
     try {
-      const [active, shiftsData, logsData, prog] = await Promise.all([
+      const [active, shiftsData, logsData, prog, placementData, eventsData] = await Promise.all([
         ShiftLogic.getActiveShift(profile.id),
         ShiftLogic.getShifts(profile.id),
         ShiftLogic.getManualLogs(profile.id),
         ShiftLogic.calculateProgress(profile.id, goal),
+        ShiftLogic.getStudentPlacement(profile.id),
+        ShiftLogic.getActiveEvents(),
       ]);
       setActiveShift(active);
       setShifts(shiftsData);
       setManualLogs(logsData);
       setProgress(prog);
+      setPlacement(placementData);
+      setEvents(eventsData || []);
     } catch (err) {
       console.error('Load error:', err);
       setToast({ m: 'שגיאה בטעינת נתונים', t: 'error' });
@@ -219,7 +226,7 @@ export default function Dashboard({ profile, onLogout }) {
     }
     setBusy(true);
     try {
-      const shift = await ShiftLogic.checkIn(profile.id, category, desc.trim());
+      const shift = await ShiftLogic.checkIn(profile.id, category, desc.trim(), placement?.site_id || null);
       setActiveShift(shift);
       setDesc('');
       setToast({ m: 'נכנסת למשמרת בהצלחה! ⏱️', t: 'success' });
@@ -261,17 +268,39 @@ export default function Dashboard({ profile, onLogout }) {
       setToast({ m: 'נא להזין תיאור', t: 'error' });
       return;
     }
+    if (logType === 'event' && !manualForm.eventId) {
+      setToast({ m: 'נא לבחור אירוע', t: 'error' });
+      return;
+    }
     setBusy(true);
     try {
-      await ShiftLogic.submitManualLog(profile.id, {
+      const siteId = logType === 'site' ? (placement?.site_id || null) : null;
+      const generalEventId = logType === 'event' ? manualForm.eventId : null;
+
+      const log = await ShiftLogic.submitManualLog(profile.id, {
         date: manualForm.date,
         durationMinutes: totalMins,
         description: manualForm.description.trim(),
         category: manualForm.category,
+        siteId,
+        generalEventId,
       });
-      setManualForm({ date: '', hours: '', minutes: '', description: '', category: 'other' });
+
+      // Fire-and-forget: notify supervisor for site-linked logs
+      if (siteId && log?.id) {
+        ShiftLogic.notifySupervisor({
+          logId: log.id,
+          studentName: profile.full_name,
+          siteName: placement?.sites?.name || '',
+          description: manualForm.description.trim(),
+          durationMinutes: totalMins,
+          date: manualForm.date,
+        });
+      }
+
+      setManualForm({ date: '', hours: '', minutes: '', description: '', category: 'other', eventId: '' });
       await loadData();
-      setToast({ m: 'הדיווח הידני נשלח לאישור! 📋', t: 'info' });
+      setToast({ m: siteId ? 'הדיווח נשלח לאישור מפקח האתר' : 'הדיווח נשלח לאישור מנהל', t: 'info' });
     } catch (err) {
       setToast({ m: err.message, t: 'error' });
     } finally {
@@ -341,9 +370,20 @@ export default function Dashboard({ profile, onLogout }) {
           {progress.progressPercent >= 100 && (
             <div className="mt-4 flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-full">
               <Award size={17} aria-hidden="true" />
-              <span className="text-sm font-medium">כל הכבוד! השלמת את היעד! 🎉</span>
+              <span className="text-sm font-medium">כל הכבוד! השלמת את היעד!</span>
             </div>
           )}
+          {/* Site Assignment */}
+          <div className="mt-4 flex items-center gap-2 px-4 py-2 rounded-full text-sm" style={{ background: 'rgba(255,255,255,0.04)' }}>
+            <MapPin size={14} className={placement ? 'text-cyan-400' : 'text-blue-200/30'} />
+            {placement ? (
+              <span className="text-blue-200/60">
+                אתר שיבוץ: <span className="text-cyan-300 font-medium">{placement.sites?.name || '—'}</span>
+              </span>
+            ) : (
+              <span className="text-blue-200/30">לא שובצת לאתר. פנה למנהל המערכת</span>
+            )}
+          </div>
         </div>
 
         {/* ─── Stats Grid ─── */}
@@ -558,20 +598,40 @@ export default function Dashboard({ profile, onLogout }) {
                         <p className="text-white text-sm font-medium truncate">{l.description}</p>
                         <p className="text-blue-200/35 text-xs mt-0.5">
                           {fmtDate(l.date)} · {fmtDur(l.duration_minutes)}
+                          {l.site_name && (
+                            <span className="text-cyan-400/40"> · {l.site_name}</span>
+                          )}
+                          {l.event_name && (
+                            <span className="text-violet-400/40"> · {l.event_name}</span>
+                          )}
                         </p>
                       </div>
                     </div>
-                    <span
-                      className={`text-xs font-medium px-3 py-1 rounded-full shrink-0 ${
-                        l.status === 'approved'
-                          ? 'bg-emerald-400/10 text-emerald-400'
-                          : l.status === 'pending'
-                          ? 'bg-amber-400/10 text-amber-400'
-                          : 'bg-red-400/10 text-red-400'
-                      }`}
-                    >
-                      {l.status === 'approved' ? 'אושר ✓' : l.status === 'pending' ? 'ממתין...' : 'נדחה ✗'}
-                    </span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span
+                        className={`text-xs font-medium px-3 py-1 rounded-full ${
+                          l.status === 'approved'
+                            ? 'bg-emerald-400/10 text-emerald-400'
+                            : l.status === 'pending'
+                            ? 'bg-amber-400/10 text-amber-400'
+                            : 'bg-red-400/10 text-red-400'
+                        }`}
+                      >
+                        {l.status === 'approved' ? 'אושר' : l.status === 'pending' ? 'ממתין...' : 'נדחה'}
+                      </span>
+                      {l.supervisor_status && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          l.supervisor_status === 'supervisor_approved'
+                            ? 'bg-emerald-400/5 text-emerald-400/60'
+                            : l.supervisor_status === 'pending_supervisor'
+                            ? 'bg-amber-400/5 text-amber-400/60'
+                            : 'bg-red-400/5 text-red-400/60'
+                        }`}>
+                          {l.supervisor_status === 'supervisor_approved' ? 'מפקח אישר' :
+                           l.supervisor_status === 'pending_supervisor' ? 'ממתין למפקח' : 'מפקח דחה'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
@@ -589,8 +649,78 @@ export default function Dashboard({ profile, onLogout }) {
           >
             <h3 className="text-white font-bold text-lg mb-1">דיווח שעות ידני</h3>
             <p className="text-blue-200/35 text-sm mb-5">
-              הוסף שעות שעבדת מחוץ למערכת. הדיווח יועבר לאישור מנהל.
+              {logType === 'site'
+                ? 'דווח שעות באתר השיבוץ שלך. הדיווח יועבר לאישור מפקח האתר.'
+                : 'דווח שעות באירוע כללי. הדיווח יועבר ישירות לאישור מנהל.'}
             </p>
+
+            {/* Log Type Toggle */}
+            <div
+              className="flex rounded-xl overflow-hidden mb-5"
+              style={{ background: 'rgba(255,255,255,0.04)' }}
+              role="tablist"
+              aria-label="סוג דיווח"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={logType === 'site'}
+                onClick={() => setLogType('site')}
+                className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
+                  logType === 'site'
+                    ? 'bg-cyan-500/15 text-cyan-300'
+                    : 'text-blue-200/40 hover:text-blue-200/70'
+                }`}
+              >
+                <MapPin size={13} /> שעות באתר
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={logType === 'event'}
+                onClick={() => setLogType('event')}
+                className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
+                  logType === 'event'
+                    ? 'bg-violet-500/15 text-violet-300'
+                    : 'text-blue-200/40 hover:text-blue-200/70'
+                }`}
+              >
+                <CalendarDays size={13} /> אירוע כללי
+              </button>
+            </div>
+
+            {/* Event Selector (only when logType='event') */}
+            {logType === 'event' && (
+              <div className="mb-4">
+                <label htmlFor="manual-event" className="block text-blue-200/45 text-xs mb-1.5 font-medium">בחר אירוע</label>
+                <select
+                  id="manual-event"
+                  value={manualForm.eventId}
+                  onChange={(e) => setManualForm((p) => ({ ...p, eventId: e.target.value }))}
+                  className="glass-input w-full appearance-none"
+                  required
+                >
+                  <option value="" style={{ background: '#111' }}>— בחר אירוע —</option>
+                  {events.map(ev => (
+                    <option key={ev.id} value={ev.id} style={{ background: '#111' }}>
+                      {ev.name}{ev.event_date ? ` (${fmtDate(ev.event_date)})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {events.length === 0 && (
+                  <p className="text-amber-400/50 text-xs mt-1">אין אירועים פעילים כרגע</p>
+                )}
+              </div>
+            )}
+
+            {/* Site info (only when logType='site') */}
+            {logType === 'site' && placement && (
+              <div className="mb-4 flex items-center gap-2 text-xs text-cyan-300/60">
+                <MapPin size={12} />
+                שעות ידווחו תחת: <span className="font-medium text-cyan-300">{placement.sites?.name}</span>
+              </div>
+            )}
+
             <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>

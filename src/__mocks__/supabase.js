@@ -137,4 +137,36 @@ export const factory = {
     progress_percent: 38.3,
     ...o,
   }),
+
+  supervisorProfile: (o = {}) => factory.profile({
+    id: 'supervisor-123',
+    full_name: 'מפקח אתר',
+    role: 'site_supervisor',
+    ...o,
+  }),
+
+  supervisorStudent: (o = {}) => ({
+    student_id: 'user-123',
+    full_name: 'יוסי כהן',
+    total_goal: 150,
+    shift_hours: 45.5,
+    approved_manual_hours: 12,
+    total_hours: 57.5,
+    progress_percent: 38.3,
+    site_name: 'בית ספר הדר',
+    site_id: 'site-1',
+    pending_supervisor_logs: 2,
+    ...o,
+  }),
+
+  supervisorPendingLog: (o = {}) => ({
+    log_id: 'log-1',
+    student_name: 'יוסי כהן',
+    description: 'חונכות פיזיקה',
+    category: 'tutoring',
+    date: '2026-02-14',
+    duration_minutes: 120,
+    site_name: 'בית ספר הדר',
+    ...o,
+  }),
 };

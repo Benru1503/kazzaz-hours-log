@@ -25,6 +25,14 @@ vi.mock('../../components/AdminPanel', () => ({
     </div>
   ),
 }));
+vi.mock('../../components/SupervisorPanel', () => ({
+  default: ({ profile, onLogout }) => (
+    <div data-testid="supervisor-panel">
+      Supervisor: {profile.full_name}
+      <button onClick={onLogout}>Logout</button>
+    </div>
+  ),
+}));
 
 import App from '../../App';
 import { supabase, supabaseFetch, resetAllMocks, factory } from '../../__mocks__/supabase';
@@ -112,6 +120,29 @@ describe('App — Auth Routing Integration', () => {
       await waitFor(() => {
         expect(screen.getByTestId('admin-panel')).toBeInTheDocument();
         expect(screen.getByText(/מנהל מערכת/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // SUPERVISOR SESSION → SUPERVISOR PANEL
+  // ═══════════════════════════════════════════
+  describe('supervisor session', () => {
+    it('renders SupervisorPanel for site_supervisor role', async () => {
+      const session = factory.session({ user: { id: 'supervisor-123' } });
+      const profile = factory.supervisorProfile();
+
+      supabase.auth.getSession.mockResolvedValue({
+        data: { session },
+        error: null,
+      });
+      supabaseFetch.mockResolvedValue(profile);
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('supervisor-panel')).toBeInTheDocument();
+        expect(screen.getByText(/מפקח אתר/)).toBeInTheDocument();
       });
     });
   });

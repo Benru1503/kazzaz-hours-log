@@ -3,6 +3,7 @@ import { supabase, supabaseFetch } from './lib/supabase';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
+import SupervisorPanel from './components/SupervisorPanel';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -188,6 +189,9 @@ export default function App() {
   // ─── Route by role ───
   if (profile.role === 'admin') {
     return <AdminPanel profile={profile} onLogout={handleLogout} />;
+  }
+  if (profile.role === 'site_supervisor') {
+    return <SupervisorPanel profile={profile} onLogout={handleLogout} />;
   }
   return <Dashboard profile={profile} onLogout={handleLogout} />;
 }
