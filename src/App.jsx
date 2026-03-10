@@ -43,6 +43,26 @@ export default function App() {
       const { data: { session: s } } = await supabase.auth.getSession();
       if (s?.user) {
         const prof = await fetchProfile(s.user.id);
+
+        // ─── Role gate (fallback path) ───
+        const loginMode = sessionStorage.getItem('kazzaz_login_mode');
+        if (loginMode) {
+          sessionStorage.removeItem('kazzaz_login_mode');
+          const role = prof?.role || 'student';
+          if (loginMode === 'admin' && role === 'student') {
+            await supabase.auth.signOut();
+            setError('חשבון זה הוא חשבון סטודנט. השתמש בכניסה הרגילה.');
+            setLoading(false);
+            return;
+          }
+          if (loginMode !== 'admin' && (role === 'admin' || role === 'site_supervisor')) {
+            await supabase.auth.signOut();
+            setError('חשבון זה הוא חשבון מנהל/מפקח. השתמש בכניסת מנהל.');
+            setLoading(false);
+            return;
+          }
+        }
+
         setSession(s);
         setProfile(prof);
         setError(null);
@@ -99,6 +119,34 @@ export default function App() {
           try {
             const prof = await fetchProfile(newSession.user.id);
             if (myVersion !== fetchVersion) return;
+
+            // ─── Role gate: block routing if login form doesn't match role ───
+            const loginMode = sessionStorage.getItem('kazzaz_login_mode');
+            if (loginMode) {
+              sessionStorage.removeItem('kazzaz_login_mode');
+              const role = prof?.role || 'student';
+              const isAdminLogin = loginMode === 'admin';
+              const isStudentRole = role === 'student';
+              const isPrivilegedRole = role === 'admin' || role === 'site_supervisor';
+
+              if (isAdminLogin && isStudentRole) {
+                await supabase.auth.signOut();
+                setSession(null);
+                setProfile(null);
+                setError('חשבון זה הוא חשבון סטודנט. השתמש בכניסה הרגילה.');
+                setLoading(false);
+                return;
+              }
+              if (!isAdminLogin && isPrivilegedRole) {
+                await supabase.auth.signOut();
+                setSession(null);
+                setProfile(null);
+                setError('חשבון זה הוא חשבון מנהל/מפקח. השתמש בכניסת מנהל.');
+                setLoading(false);
+                return;
+              }
+            }
+
             setSession(newSession);
             setProfile(prof);
             setError(null);

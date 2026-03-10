@@ -13,10 +13,7 @@ SET email = u.email
 FROM auth.users u
 WHERE u.id = p.id AND p.email IS NULL;
 
--- Update role constraint to include 'site_supervisor'
-ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
-  CHECK (role IN ('student', 'admin', 'site_supervisor'));
+-- Role constraint handled by user_role enum (updated in 000_pre_fix.sql)
 
 -- ─── Shifts: link to site ───
 ALTER TABLE shifts ADD COLUMN IF NOT EXISTS site_id uuid REFERENCES sites(id) ON DELETE SET NULL;
