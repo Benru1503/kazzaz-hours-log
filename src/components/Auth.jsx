@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase, supabaseFetch } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { Clock, AlertCircle, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
 
 // ─── Timeout wrapper: rejects if promise doesn't resolve within ms ───
@@ -35,26 +35,16 @@ export default function Auth({ onAuthSuccess }) {
     try {
       if (isLogin) {
         // ─── LOGIN ───
-        const { data: signInData, error: signInError } = await withTimeout(
+        // Store login mode so App.jsx can validate role before routing
+        sessionStorage.setItem('kazzaz_login_mode', adminMode ? 'admin' : 'student');
+
+        const { error: signInError } = await withTimeout(
           supabase.auth.signInWithPassword({ email, password }),
           AUTH_TIMEOUT_MS,
         );
-        if (signInError) throw signInError;
-
-        // ─── Role check: ensure user is using the correct login form ───
-        const userId = signInData?.user?.id;
-        if (userId) {
-          const profile = await supabaseFetch(`profiles?id=eq.${userId}`, { single: true });
-          const role = profile?.role || 'student';
-
-          if (adminMode && role === 'student') {
-            await supabase.auth.signOut();
-            throw new Error('חשבון זה הוא חשבון סטודנט. השתמש בכניסה הרגילה.');
-          }
-          if (!adminMode && (role === 'admin' || role === 'site_supervisor')) {
-            await supabase.auth.signOut();
-            throw new Error('חשבון זה הוא חשבון מנהל/מפקח. השתמש בכניסת מנהל.');
-          }
+        if (signInError) {
+          sessionStorage.removeItem('kazzaz_login_mode');
+          throw signInError;
         }
 
         // Notify parent as fallback — if onAuthStateChange doesn't fire
