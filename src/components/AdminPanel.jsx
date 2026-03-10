@@ -4,7 +4,8 @@ import {
   LogOut, Shield, Check, X, Users, BarChart3,
   Award, AlertCircle, ClipboardList, Calendar,
   Timer, ChevronLeft, Loader2, RefreshCw,
-  MapPin, Plus, CalendarDays, UserPlus, Eye, EyeOff, Settings
+  MapPin, Plus, CalendarDays, UserPlus, Eye, EyeOff, Settings,
+  Mail, Upload
 } from 'lucide-react';
 
 const fmtDate = (d) =>
@@ -192,22 +193,30 @@ export default function AdminPanel({ profile, onLogout }) {
   const [showPlacementForm, setShowPlacementForm] = useState(false);
   const [placementForm, setPlacementForm] = useState({ studentId: '', siteId: '' });
 
+  // Approved scholars
+  const [approvedScholars, setApprovedScholars] = useState([]);
+  const [showScholarForm, setShowScholarForm] = useState(false);
+  const [scholarEmail, setScholarEmail] = useState('');
+  const [csvImporting, setCsvImporting] = useState(false);
+
   // ─── Load data ───
   const loadData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
     try {
-      const [studentsData, pending, sitesData, eventsData, supervisorsData] = await Promise.all([
+      const [studentsData, pending, sitesData, eventsData, supervisorsData, scholarsData] = await Promise.all([
         ShiftLogic.getAllStudentsSummary(),
         ShiftLogic.getAllPendingLogs(),
         ShiftLogic.getAllSites(),
         ShiftLogic.getAllEvents(),
         ShiftLogic.getAllSupervisors(),
+        ShiftLogic.getApprovedScholars(),
       ]);
       setStudents(studentsData || []);
       setPendingLogs(pending || []);
       setSites(sitesData || []);
       setEvents(eventsData || []);
       setSupervisors(supervisorsData || []);
+      setApprovedScholars(scholarsData || []);
     } catch (err) {
       console.error('Admin load error:', err);
       setToast({ m: 'שגיאה בטעינת נתונים: ' + err.message, t: 'error' });
@@ -359,6 +368,73 @@ export default function AdminPanel({ profile, onLogout }) {
       setShowPlacementForm(false);
       await loadPlacements();
       setToast({ m: 'סטודנט שובץ בהצלחה', t: 'success' });
+    } catch (err) {
+      setToast({ m: err.message, t: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ─── Add Approved Scholar ───
+  const handleAddScholar = async (e) => {
+    e.preventDefault();
+    if (!scholarEmail.trim()) return;
+    setBusy(true);
+    try {
+      await ShiftLogic.addApprovedScholar(scholarEmail.trim(), profile.id);
+      setScholarEmail('');
+      setShowScholarForm(false);
+      await loadData();
+      setToast({ m: 'אימייל נוסף לרשימת מלגאים מאושרים', t: 'success' });
+    } catch (err) {
+      if (err.message?.includes('duplicate') || err.message?.includes('unique')) {
+        setToast({ m: 'אימייל זה כבר קיים ברשימה', t: 'error' });
+      } else {
+        setToast({ m: err.message, t: 'error' });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ─── CSV Import ───
+  const handleCsvImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvImporting(true);
+    try {
+      const text = await file.text();
+      const emails = text
+        .split(/[\r\n,;]+/)
+        .map(line => line.trim())
+        .filter(line => line && line.includes('@'));
+
+      if (emails.length === 0) {
+        throw new Error('לא נמצאו כתובות אימייל בקובץ');
+      }
+
+      const result = await ShiftLogic.addApprovedScholarsBulk(emails, profile.id);
+      await loadData();
+      const added = Array.isArray(result) ? result.length : 0;
+      setToast({
+        m: `${added} כתובות נוספו בהצלחה (${emails.length - added} כפילויות דולגו)`,
+        t: 'success',
+      });
+    } catch (err) {
+      setToast({ m: err.message, t: 'error' });
+    } finally {
+      setCsvImporting(false);
+      e.target.value = '';
+    }
+  };
+
+  // ─── Remove Approved Scholar ───
+  const handleRemoveScholar = async (id) => {
+    setBusy(true);
+    try {
+      await ShiftLogic.removeApprovedScholar(id);
+      await loadData();
+      setToast({ m: 'אימייל הוסר מהרשימה', t: 'success' });
     } catch (err) {
       setToast({ m: err.message, t: 'error' });
     } finally {
@@ -1041,6 +1117,99 @@ export default function AdminPanel({ profile, onLogout }) {
                       }`}>
                         {p.status === 'active' ? 'פעיל' : p.status === 'completed' ? 'הושלם' : 'בוטל'}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* ── Approved Scholars Section ── */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-bold flex items-center gap-2">
+                  <Mail size={16} className="text-emerald-400" />
+                  מלגאים מאושרים ({approvedScholars.filter(s => s.status === 'pending').length} ממתינים)
+                </h3>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer">
+                    <Upload size={14} />
+                    {csvImporting ? 'מייבא...' : 'ייבוא CSV'}
+                    <input
+                      type="file"
+                      accept=".csv,.txt"
+                      onChange={handleCsvImport}
+                      className="hidden"
+                      disabled={csvImporting}
+                    />
+                  </label>
+                  <button
+                    onClick={() => setShowScholarForm(!showScholarForm)}
+                    className="flex items-center gap-1.5 text-xs text-emerald-300 hover:text-emerald-200 transition-colors"
+                  >
+                    <Plus size={14} /> הוסף אימייל
+                  </button>
+                </div>
+              </div>
+
+              {showScholarForm && (
+                <form onSubmit={handleAddScholar} className="glass p-4 mb-3 space-y-3">
+                  <input
+                    type="email"
+                    value={scholarEmail}
+                    onChange={(e) => setScholarEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    className="glass-input w-full"
+                    dir="ltr"
+                    style={{ textAlign: 'left' }}
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={busy}
+                      className="px-4 py-2 rounded-xl text-white text-sm font-medium gradient-primary disabled:opacity-50">
+                      {busy ? <Loader2 size={14} className="animate-spin" /> : 'הוסף'}
+                    </button>
+                    <button type="button" onClick={() => setShowScholarForm(false)}
+                      className="px-4 py-2 rounded-xl text-blue-200/40 text-sm border border-white/10 hover:bg-white/5">
+                      ביטול
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {approvedScholars.length === 0 ? (
+                <div className="glass p-6 text-center">
+                  <Mail size={28} className="text-blue-200/20 mx-auto mb-2" />
+                  <p className="text-blue-200/40 text-sm">אין מלגאים מאושרים ברשימה</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {approvedScholars.map(s => (
+                    <div key={s.id} className="glass p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-white text-sm font-medium" dir="ltr">{s.email}</p>
+                        <p className="text-blue-200/35 text-xs">
+                          {fmtDate(s.created_at)}
+                          {s.used_at && ` · נרשם ${fmtDate(s.used_at)}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          s.status === 'pending'
+                            ? 'bg-amber-400/10 text-amber-400'
+                            : 'bg-emerald-400/10 text-emerald-400'
+                        }`}>
+                          {s.status === 'pending' ? 'ממתין' : 'נרשם'}
+                        </span>
+                        {s.status === 'pending' && (
+                          <button
+                            onClick={() => handleRemoveScholar(s.id)}
+                            disabled={busy}
+                            className="text-red-400/50 hover:text-red-400 text-xs transition-colors"
+                          >
+                            הסר
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

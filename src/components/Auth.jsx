@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { ShiftLogic } from '../lib/ShiftLogic';
 import { Clock, AlertCircle, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
 
 // ─── Timeout wrapper: rejects if promise doesn't resolve within ms ───
@@ -58,6 +59,15 @@ export default function Auth({ onAuthSuccess }) {
         }
         if (password.length < 6) {
           throw new Error('הסיסמה חייבת להכיל לפחות 6 תווים');
+        }
+
+        // ─── Check approved scholars allowlist ───
+        const isApproved = await withTimeout(
+          ShiftLogic.checkApprovedEmail(email),
+          AUTH_TIMEOUT_MS,
+        );
+        if (!isApproved) {
+          throw new Error('כתובת האימייל אינה מאושרת להרשמה. פנה למנהל המערכת.');
         }
 
         const { error: signUpError } = await withTimeout(

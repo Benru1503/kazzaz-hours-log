@@ -411,4 +411,43 @@ export const ShiftLogic = {
 
     return resp.json();
   },
+
+  // ═══════════════════════════════════════════
+  // APPROVED SCHOLARS (Registration Allowlist)
+  // ═══════════════════════════════════════════
+
+  async checkApprovedEmail(email) {
+    return supabaseRpc('check_approved_email', { p_email: email });
+  },
+
+  async getApprovedScholars() {
+    const data = await supabaseFetch('approved_scholars?order=created_at.desc');
+    return data || [];
+  },
+
+  async addApprovedScholar(email, adminId) {
+    return supabaseFetch('approved_scholars', {
+      method: 'POST',
+      body: { email: email.toLowerCase().trim(), added_by: adminId },
+      single: true,
+    });
+  },
+
+  async addApprovedScholarsBulk(emails, adminId) {
+    const body = emails.map(e => ({
+      email: e.toLowerCase().trim(),
+      added_by: adminId,
+    }));
+    return supabaseFetch('approved_scholars', {
+      method: 'POST',
+      body,
+      headers: { 'Prefer': 'resolution=ignore-duplicates,return=representation' },
+    });
+  },
+
+  async removeApprovedScholar(id) {
+    return supabaseFetch(`approved_scholars?id=eq.${id}`, {
+      method: 'DELETE',
+    });
+  },
 };

@@ -23,6 +23,10 @@ vi.mock('../../lib/ShiftLogic', () => ({
     assignSupervisorToSite: vi.fn(),
     removeSupervisorFromSite: vi.fn(),
     getSiteSupervisors: vi.fn(),
+    getApprovedScholars: vi.fn(),
+    addApprovedScholar: vi.fn(),
+    addApprovedScholarsBulk: vi.fn(),
+    removeApprovedScholar: vi.fn(),
   },
 }));
 
@@ -40,6 +44,7 @@ function setupMocks(overrides = {}) {
   ShiftLogic.getAllSupervisors.mockResolvedValue(overrides.supervisors ?? []);
   ShiftLogic.getActiveSites.mockResolvedValue(overrides.activeSites ?? []);
   ShiftLogic.getAllPlacements.mockResolvedValue(overrides.placements ?? []);
+  ShiftLogic.getApprovedScholars.mockResolvedValue(overrides.scholars ?? []);
 }
 
 describe('AdminPanel Component', () => {
