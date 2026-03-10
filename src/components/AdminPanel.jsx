@@ -1128,7 +1128,7 @@ export default function AdminPanel({ profile, onLogout }) {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-white font-bold flex items-center gap-2">
                   <Mail size={16} className="text-emerald-400" />
-                  מלגאים מאושרים ({approvedScholars.filter(s => s.status === 'pending').length} ממתינים)
+                  מלגאים מאושרים ({approvedScholars.filter(s => s.status === 'pending').length} טרם נרשמו)
                 </h3>
                 <div className="flex items-center gap-3">
                   <label className="flex items-center gap-1.5 text-xs text-emerald-300 hover:text-emerald-200 transition-colors cursor-pointer">
@@ -1198,7 +1198,7 @@ export default function AdminPanel({ profile, onLogout }) {
                             ? 'bg-amber-400/10 text-amber-400'
                             : 'bg-emerald-400/10 text-emerald-400'
                         }`}>
-                          {s.status === 'pending' ? 'ממתין' : 'נרשם'}
+                          {s.status === 'pending' ? 'טרם נרשם' : 'נרשם'}
                         </span>
                         {s.status === 'pending' && (
                           <button
