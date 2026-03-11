@@ -177,7 +177,6 @@ export default function Dashboard({ profile, onLogout }) {
     progressPercent: 0, pendingLogs: 0,
   });
   const [tab, setTab] = useState('clock');
-  const [category, setCategory] = useState('tutoring');
   const [desc, setDesc] = useState('');
   const [placement, setPlacement] = useState(null);
   const [events, setEvents] = useState([]);
@@ -226,7 +225,7 @@ export default function Dashboard({ profile, onLogout }) {
     }
     setBusy(true);
     try {
-      const shift = await ShiftLogic.checkIn(profile.id, category, desc.trim(), placement?.site_id || null);
+      const shift = await ShiftLogic.checkIn(profile.id, 'other', desc.trim(), placement?.site_id || null);
       setActiveShift(shift);
       setDesc('');
       setToast({ m: 'נכנסת למשמרת בהצלחה! ⏱️', t: 'success' });
@@ -468,32 +467,9 @@ export default function Dashboard({ profile, onLogout }) {
                 <div className="text-center">
                   <h3 className="text-white font-bold text-lg mb-1">התחלת משמרת חדשה</h3>
                   <p className="text-blue-200/35 text-sm">
-                    בחר קטגוריה, תאר את המשימה ולחץ כניסה
+                    תאר את המשימה ולחץ כניסה
                   </p>
                 </div>
-
-                {/* Category Grid */}
-                <fieldset>
-                  <legend className="sr-only">בחר קטגוריה</legend>
-                  <div className="grid grid-cols-3 gap-2">
-                    {Object.entries(CATEGORIES).map(([key, val]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setCategory(key)}
-                        aria-pressed={category === key}
-                        className={`py-3 px-2 rounded-xl text-xs font-medium flex flex-col items-center gap-1.5 transition-all ${
-                          category === key
-                            ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-400/25'
-                            : 'text-blue-200/40 border border-white/[0.05] hover:border-white/[0.12]'
-                        }`}
-                      >
-                        <span className="text-lg" aria-hidden="true">{val.icon}</span>
-                        {val.label}
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
 
                 {/* Task Description */}
                 <div>

@@ -44,6 +44,14 @@ export default function App() {
       if (s?.user) {
         const prof = await fetchProfile(s.user.id);
 
+        // ─── Disabled account gate (fallback path) ───
+        if (prof.is_active === false) {
+          await supabase.auth.signOut();
+          setError('חשבון זה מושבת. פנה למנהל המערכת.');
+          setLoading(false);
+          return;
+        }
+
         // ─── Role gate (fallback path) ───
         const loginMode = sessionStorage.getItem('kazzaz_login_mode');
         if (loginMode) {
@@ -102,6 +110,11 @@ export default function App() {
             try {
               const prof = await fetchProfile(newSession.user.id);
               if (myVersion !== fetchVersion) return;
+              if (prof.is_active === false) {
+                await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+                resolve(null, null, 'חשבון זה מושבת. פנה למנהל המערכת.');
+                return;
+              }
               resolve(newSession, prof, null);
             } catch (err) {
               if (myVersion !== fetchVersion) return;
@@ -119,6 +132,16 @@ export default function App() {
           try {
             const prof = await fetchProfile(newSession.user.id);
             if (myVersion !== fetchVersion) return;
+
+            // ─── Disabled account gate ───
+            if (prof.is_active === false) {
+              await supabase.auth.signOut();
+              setSession(null);
+              setProfile(null);
+              setError('חשבון זה מושבת. פנה למנהל המערכת.');
+              setLoading(false);
+              return;
+            }
 
             // ─── Role gate: block routing if login form doesn't match role ───
             const loginMode = sessionStorage.getItem('kazzaz_login_mode');

@@ -25,7 +25,7 @@ export const ShiftLogic = {
 
   // ─── Check In (updated: accepts optional siteId) ───
 
-  async checkIn(userId, category, taskDescription, siteId = null) {
+  async checkIn(userId, category = 'other', taskDescription, siteId = null) {
     const existing = await this.getActiveShift(userId);
     if (existing) {
       throw new Error('כבר יש לך משמרת פעילה. צא מהמשמרת הנוכחית לפני שתתחיל חדשה.');
@@ -168,6 +168,14 @@ export const ShiftLogic = {
 
   async getAllStudentsSummary() {
     return await supabaseRpc('get_all_students_summary');
+  },
+
+  async toggleStudentActive(studentId, isActive) {
+    return supabaseFetch(`profiles?id=eq.${studentId}`, {
+      method: 'PATCH',
+      body: { is_active: isActive },
+      single: true,
+    });
   },
 
   async getAllPendingLogs() {
