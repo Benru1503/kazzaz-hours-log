@@ -12,6 +12,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const resolved = useRef(false);
+  const loggedOut = useRef(false);
 
   // ─── Mark initial loading done (only once) ───
   const resolve = (sess, prof, err) => {
@@ -129,6 +130,7 @@ export default function App() {
 
         // ── User signed in ──
         if (event === 'SIGNED_IN' && newSession?.user) {
+          loggedOut.current = false;
           try {
             const prof = await fetchProfile(newSession.user.id);
             if (myVersion !== fetchVersion) return;
@@ -193,7 +195,9 @@ export default function App() {
         }
 
         // ── Token refreshed (just update session, don't re-fetch profile) ──
+        // Guard: if user explicitly logged out, ignore stale refreshes
         if (event === 'TOKEN_REFRESHED' && newSession) {
+          if (loggedOut.current) return;
           setSession(newSession);
         }
       }
@@ -207,12 +211,15 @@ export default function App() {
 
   // ─── Logout ───
   const handleLogout = () => {
+    // Prevent TOKEN_REFRESHED from restoring the session after logout
+    loggedOut.current = true;
     // Clear UI immediately for instant feedback
     setSession(null);
     setProfile(null);
     setError(null);
-    // Sign out in the background (don't block UI on network request)
-    supabase.auth.signOut().catch((err) => console.error('Logout error:', err));
+    // scope: 'local' clears localStorage immediately (no network wait).
+    // This prevents autoRefreshToken from finding a session to refresh.
+    supabase.auth.signOut({ scope: 'local' }).catch((err) => console.error('Logout error:', err));
   };
 
   // ─── Loading ───
