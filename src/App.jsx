@@ -206,15 +206,13 @@ export default function App() {
   }, []);
 
   // ─── Logout ───
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+  const handleLogout = () => {
+    // Clear UI immediately for instant feedback
     setSession(null);
     setProfile(null);
     setError(null);
+    // Sign out in the background (don't block UI on network request)
+    supabase.auth.signOut().catch((err) => console.error('Logout error:', err));
   };
 
   // ─── Loading ───
