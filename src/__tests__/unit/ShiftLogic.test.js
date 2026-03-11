@@ -969,6 +969,44 @@ describe('ShiftLogic', () => {
     });
   });
 
+  // ═══════════════════════════════════════════
+  // toggleStudentActive
+  // ═══════════════════════════════════════════
+  describe('toggleStudentActive', () => {
+    it('sends PATCH to deactivate a student', async () => {
+      const updated = { id: 'student-1', is_active: false };
+      supabaseFetch.mockResolvedValue(updated);
+
+      const result = await ShiftLogic.toggleStudentActive('student-1', false);
+
+      expect(supabaseFetch).toHaveBeenCalledWith('profiles?id=eq.student-1', {
+        method: 'PATCH',
+        body: { is_active: false },
+        single: true,
+      });
+      expect(result).toEqual(updated);
+    });
+
+    it('sends PATCH to reactivate a student', async () => {
+      const updated = { id: 'student-1', is_active: true };
+      supabaseFetch.mockResolvedValue(updated);
+
+      const result = await ShiftLogic.toggleStudentActive('student-1', true);
+
+      expect(supabaseFetch).toHaveBeenCalledWith('profiles?id=eq.student-1', {
+        method: 'PATCH',
+        body: { is_active: true },
+        single: true,
+      });
+      expect(result).toEqual(updated);
+    });
+
+    it('propagates errors from supabaseFetch', async () => {
+      supabaseFetch.mockRejectedValue(new Error('Network error'));
+      await expect(ShiftLogic.toggleStudentActive('student-1', false)).rejects.toThrow('Network error');
+    });
+  });
+
   describe('getSupervisorSites', () => {
     it('fetches site_supervisors and extracts the sites objects', async () => {
       supabaseFetch.mockResolvedValue([

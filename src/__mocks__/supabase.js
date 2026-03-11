@@ -135,6 +135,7 @@ export const factory = {
     pending_logs: 2,
     total_hours: 57.5,
     progress_percent: 38.3,
+    is_active: true,
     ...o,
   }),
 

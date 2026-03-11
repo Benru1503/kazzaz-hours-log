@@ -353,4 +353,131 @@ describe('AdminPanel Component', () => {
       });
     });
   });
+
+  // ═══════════════════════════════════════════
+  // STUDENT MANAGEMENT (activate/deactivate)
+  // ═══════════════════════════════════════════
+  describe('student management', () => {
+    it('shows students section in management tab with toggle buttons', async () => {
+      setupMocks({
+        students: [
+          factory.studentSummary({ student_id: 's1', full_name: 'יוסי כהן', is_active: true }),
+          factory.studentSummary({ student_id: 's2', full_name: 'מיכל לוי', is_active: true }),
+        ],
+      });
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => {
+        // Student names should appear in management section
+        expect(screen.getByText(/2 פעילים/)).toBeInTheDocument();
+        // "השבת" (deactivate) buttons should exist for active students
+        const deactivateButtons = screen.getAllByText('השבת');
+        expect(deactivateButtons.length).toBe(2);
+      });
+    });
+
+    it('shows inactive students with disabled styling and activate button', async () => {
+      setupMocks({
+        students: [
+          factory.studentSummary({ student_id: 's1', full_name: 'יוסי כהן', is_active: true }),
+          factory.studentSummary({ student_id: 's2', full_name: 'מיכל לוי', is_active: false }),
+        ],
+      });
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => {
+        // Should show 1 active, 1 deactivated
+        expect(screen.getByText(/1 פעילים/)).toBeInTheDocument();
+        expect(screen.getByText(/1 מושבתים/)).toBeInTheDocument();
+        // Inactive student should have "(מושבת)" label
+        expect(screen.getByText('(מושבת)')).toBeInTheDocument();
+        // Should have "הפעל" (activate) button for the deactivated student
+        expect(screen.getByText('הפעל')).toBeInTheDocument();
+        // And "השבת" (deactivate) button for the active student
+        expect(screen.getByText('השבת')).toBeInTheDocument();
+      });
+    });
+
+    it('calls toggleStudentActive to deactivate a student', async () => {
+      ShiftLogic.toggleStudentActive.mockResolvedValue({});
+      setupMocks({
+        students: [
+          factory.studentSummary({ student_id: 's1', full_name: 'דני אלון', is_active: true }),
+        ],
+      });
+
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => screen.getByText('השבת'));
+      await user.click(screen.getByText('השבת'));
+
+      await waitFor(() => {
+        expect(ShiftLogic.toggleStudentActive).toHaveBeenCalledWith('s1', false);
+      });
+    });
+
+    it('calls toggleStudentActive to reactivate a student', async () => {
+      ShiftLogic.toggleStudentActive.mockResolvedValue({});
+      setupMocks({
+        students: [
+          factory.studentSummary({ student_id: 's1', full_name: 'דני אלון', is_active: false }),
+        ],
+      });
+
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => screen.getByText('הפעל'));
+      await user.click(screen.getByText('הפעל'));
+
+      await waitFor(() => {
+        expect(ShiftLogic.toggleStudentActive).toHaveBeenCalledWith('s1', true);
+      });
+    });
+
+    it('counts only active students in stats cards', async () => {
+      setupMocks({
+        students: [
+          factory.studentSummary({ student_id: 's1', full_name: 'א', is_active: true, progress_percent: 50 }),
+          factory.studentSummary({ student_id: 's2', full_name: 'ב', is_active: true, progress_percent: 100 }),
+          factory.studentSummary({ student_id: 's3', full_name: 'ג', is_active: false, progress_percent: 80 }),
+        ],
+      });
+
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => {
+        // Total active students should be 2 (not 3)
+        expect(screen.getByText('2')).toBeInTheDocument();
+      });
+    });
+
+    it('shows empty state when no students exist in management', async () => {
+      setupMocks({ students: [] });
+      const user = userEvent.setup();
+      render(<AdminPanel profile={adminProfile} onLogout={vi.fn()} />);
+
+      await waitFor(() => screen.getByText('ניהול'));
+      await user.click(screen.getByText('ניהול'));
+
+      await waitFor(() => {
+        expect(screen.getByText('אין סטודנטים רשומים')).toBeInTheDocument();
+      });
+    });
+  });
 });
