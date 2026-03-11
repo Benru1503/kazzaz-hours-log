@@ -442,13 +442,28 @@ export default function AdminPanel({ profile, onLogout }) {
     }
   };
 
+  // ─── Toggle Student Active ───
+  const handleToggleStudentActive = async (studentId, currentActive) => {
+    setBusy(true);
+    try {
+      await ShiftLogic.toggleStudentActive(studentId, !currentActive);
+      await loadData();
+      setToast({ m: currentActive ? 'הסטודנט הושבת' : 'הסטודנט הופעל', t: 'success' });
+    } catch (err) {
+      setToast({ m: err.message, t: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // ─── Aggregate stats ───
-  const totalStudents = students.length;
+  const activeStudents = students.filter(s => s.is_active !== false);
+  const totalStudents = activeStudents.length;
   const avgProgress =
     totalStudents > 0
-      ? students.reduce((a, s) => a + parseFloat(s.progress_percent || 0), 0) / totalStudents
+      ? activeStudents.reduce((a, s) => a + parseFloat(s.progress_percent || 0), 0) / totalStudents
       : 0;
-  const completed = students.filter((s) => parseFloat(s.progress_percent) >= 100).length;
+  const completed = activeStudents.filter((s) => parseFloat(s.progress_percent) >= 100).length;
 
   const activeSites = sites.filter(s => s.is_active);
 
@@ -786,6 +801,48 @@ export default function AdminPanel({ profile, onLogout }) {
         {/* ═══ MANAGEMENT TAB ═══ */}
         {tab === 'manage' && (
           <div className="space-y-6 animate-tab-enter">
+
+            {/* ── Students Section ── */}
+            <section>
+              <h3 className="text-white font-bold flex items-center gap-2 mb-3">
+                <Users size={16} className="text-emerald-400" /> סטודנטים ({activeStudents.length} פעילים{students.length > activeStudents.length ? ` · ${students.length - activeStudents.length} מושבתים` : ''})
+              </h3>
+              {students.length === 0 ? (
+                <div className="glass p-6 text-center">
+                  <Users size={28} className="text-blue-200/20 mx-auto mb-2" />
+                  <p className="text-blue-200/40 text-sm">אין סטודנטים רשומים</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {students.map(s => (
+                    <div key={s.student_id} className={`glass p-4 flex items-center justify-between ${s.is_active === false ? 'opacity-50' : ''}`}>
+                      <div>
+                        <p className="text-white text-sm font-medium">
+                          {s.full_name}
+                          {s.is_active === false && <span className="text-red-400 text-xs mr-2">(מושבת)</span>}
+                        </p>
+                        <p className="text-blue-200/35 text-xs">
+                          {s.site_name || 'לא שובץ'}
+                          {' · '}
+                          {parseFloat(s.total_hours || 0).toFixed(1)} שעות
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleToggleStudentActive(s.student_id, s.is_active !== false)}
+                        disabled={busy}
+                        className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                          s.is_active !== false
+                            ? 'text-red-400/70 hover:text-red-400 border border-red-400/20 hover:bg-red-400/10'
+                            : 'text-emerald-400/70 hover:text-emerald-400 border border-emerald-400/20 hover:bg-emerald-400/10'
+                        }`}
+                      >
+                        {s.is_active !== false ? 'השבת' : 'הפעל'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
 
             {/* ── Sites Section ── */}
             <section>

@@ -27,6 +27,7 @@ vi.mock('../../lib/ShiftLogic', () => ({
     addApprovedScholar: vi.fn(),
     addApprovedScholarsBulk: vi.fn(),
     removeApprovedScholar: vi.fn(),
+    toggleStudentActive: vi.fn(),
   },
 }));
 

@@ -132,16 +132,16 @@ describe('Dashboard Component', () => {
   // CHECK IN
   // ═══════════════════════════════════════════
   describe('check in', () => {
-    it('shows category grid and description input', async () => {
+    it('shows description input without category grid', async () => {
       setupMocks();
       render(<Dashboard profile={profile} onLogout={vi.fn()} />);
 
       await waitFor(() => {
-        expect(screen.getByText('חונכות')).toBeInTheDocument();
-        expect(screen.getByText('הדרכה')).toBeInTheDocument();
-        expect(screen.getByText('שירות קהילתי')).toBeInTheDocument();
         expect(screen.getByPlaceholderText('תיאור המשימה...')).toBeInTheDocument();
+        expect(screen.getByText('תאר את המשימה ולחץ כניסה')).toBeInTheDocument();
       });
+      // Category grid should NOT be present
+      expect(screen.queryByText('חונכות')).not.toBeInTheDocument();
     });
 
     it('calls ShiftLogic.checkIn on submit', async () => {
@@ -159,7 +159,7 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(ShiftLogic.checkIn).toHaveBeenCalledWith(
           'user-123',
-          'tutoring', // default category
+          'other', // default category
           'חונכות מתמטיקה',
           null, // siteId (no placement)
         );
@@ -461,7 +461,7 @@ describe('Dashboard Component', () => {
       await waitFor(() => {
         expect(ShiftLogic.checkIn).toHaveBeenCalledWith(
           'user-123',
-          'tutoring',
+          'other',
           'חונכות מתמטיקה',
           'site-1',
         );
