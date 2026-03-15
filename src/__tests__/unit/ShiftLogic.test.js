@@ -1007,6 +1007,216 @@ describe('ShiftLogic', () => {
     });
   });
 
+  // ═══════════════════════════════════════════
+  // updateSite
+  // ═══════════════════════════════════════════
+  describe('updateSite', () => {
+    it('sends PATCH with provided updates + updated_at timestamp', async () => {
+      const updated = { id: 'site-1', name: 'שם חדש', address: 'כתובת חדשה' };
+      supabaseFetch.mockResolvedValue(updated);
+
+      const before = new Date().toISOString();
+      const result = await ShiftLogic.updateSite('site-1', { name: 'שם חדש', address: 'כתובת חדשה' });
+      const after = new Date().toISOString();
+
+      expect(supabaseFetch).toHaveBeenCalledWith('sites?id=eq.site-1', {
+        method: 'PATCH',
+        body: expect.objectContaining({
+          name: 'שם חדש',
+          address: 'כתובת חדשה',
+        }),
+        single: true,
+      });
+      const ts = supabaseFetch.mock.calls[0][1].body.updated_at;
+      expect(ts >= before).toBe(true);
+      expect(ts <= after).toBe(true);
+      expect(result).toEqual(updated);
+    });
+
+    it('propagates errors', async () => {
+      supabaseFetch.mockRejectedValue(new Error('Forbidden'));
+      await expect(ShiftLogic.updateSite('site-1', { name: 'x' })).rejects.toThrow('Forbidden');
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // updatePlacementStatus
+  // ═══════════════════════════════════════════
+  describe('updatePlacementStatus', () => {
+    it('sends PATCH with new status', async () => {
+      const updated = { id: 'p-1', status: 'completed' };
+      supabaseFetch.mockResolvedValue(updated);
+
+      const result = await ShiftLogic.updatePlacementStatus('p-1', 'completed');
+
+      expect(supabaseFetch).toHaveBeenCalledWith('student_placements?id=eq.p-1', {
+        method: 'PATCH',
+        body: { status: 'completed' },
+        single: true,
+      });
+      expect(result).toEqual(updated);
+    });
+
+    it('sends withdrawn status', async () => {
+      supabaseFetch.mockResolvedValue({ id: 'p-1', status: 'withdrawn' });
+      await ShiftLogic.updatePlacementStatus('p-1', 'withdrawn');
+      expect(supabaseFetch.mock.calls[0][1].body.status).toBe('withdrawn');
+    });
+
+    it('propagates errors', async () => {
+      supabaseFetch.mockRejectedValue(new Error('Not found'));
+      await expect(ShiftLogic.updatePlacementStatus('p-x', 'completed')).rejects.toThrow('Not found');
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // updateEvent
+  // ═══════════════════════════════════════════
+  describe('updateEvent', () => {
+    it('sends PATCH with provided updates', async () => {
+      const updated = { id: 'ev-1', name: 'אירוע מעודכן' };
+      supabaseFetch.mockResolvedValue(updated);
+
+      const result = await ShiftLogic.updateEvent('ev-1', { name: 'אירוע מעודכן' });
+
+      expect(supabaseFetch).toHaveBeenCalledWith('general_events?id=eq.ev-1', {
+        method: 'PATCH',
+        body: { name: 'אירוע מעודכן' },
+        single: true,
+      });
+      expect(result).toEqual(updated);
+    });
+
+    it('propagates errors', async () => {
+      supabaseFetch.mockRejectedValue(new Error('Server error'));
+      await expect(ShiftLogic.updateEvent('ev-1', { name: 'x' })).rejects.toThrow('Server error');
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // deactivateEvent
+  // ═══════════════════════════════════════════
+  describe('deactivateEvent', () => {
+    it('patches event with is_active: false via updateEvent', async () => {
+      const deactivated = { id: 'ev-1', name: 'אירוע', is_active: false };
+      supabaseFetch.mockResolvedValue(deactivated);
+
+      const result = await ShiftLogic.deactivateEvent('ev-1');
+
+      expect(supabaseFetch).toHaveBeenCalledWith('general_events?id=eq.ev-1', {
+        method: 'PATCH',
+        body: { is_active: false },
+        single: true,
+      });
+      expect(result).toEqual(deactivated);
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // APPROVED SCHOLARS
+  // ═══════════════════════════════════════════
+  describe('checkApprovedEmail', () => {
+    it('calls RPC check_approved_email with lowered email', async () => {
+      supabaseRpc.mockResolvedValue(true);
+      const result = await ShiftLogic.checkApprovedEmail('Test@Example.com');
+      expect(supabaseRpc).toHaveBeenCalledWith('check_approved_email', { p_email: 'Test@Example.com' });
+      expect(result).toBe(true);
+    });
+
+    it('returns false when email is not approved', async () => {
+      supabaseRpc.mockResolvedValue(false);
+      const result = await ShiftLogic.checkApprovedEmail('unknown@test.com');
+      expect(result).toBe(false);
+    });
+
+    it('propagates RPC errors', async () => {
+      supabaseRpc.mockRejectedValue(new Error('RPC error'));
+      await expect(ShiftLogic.checkApprovedEmail('x')).rejects.toThrow('RPC error');
+    });
+  });
+
+  describe('getApprovedScholars', () => {
+    it('fetches scholars ordered by created_at desc', async () => {
+      const scholars = [{ id: 's1', email: 'a@test.com', status: 'pending' }];
+      supabaseFetch.mockResolvedValue(scholars);
+
+      const result = await ShiftLogic.getApprovedScholars();
+
+      expect(supabaseFetch).toHaveBeenCalledWith('approved_scholars?order=created_at.desc');
+      expect(result).toEqual(scholars);
+    });
+
+    it('returns empty array when null', async () => {
+      supabaseFetch.mockResolvedValue(null);
+      expect(await ShiftLogic.getApprovedScholars()).toEqual([]);
+    });
+
+    it('returns empty array when empty', async () => {
+      supabaseFetch.mockResolvedValue([]);
+      expect(await ShiftLogic.getApprovedScholars()).toEqual([]);
+    });
+  });
+
+  describe('addApprovedScholar', () => {
+    it('sends POST with lowered/trimmed email and admin ID', async () => {
+      const scholar = { id: 'new', email: 'test@test.com', added_by: 'admin-1' };
+      supabaseFetch.mockResolvedValue(scholar);
+
+      const result = await ShiftLogic.addApprovedScholar('  Test@Test.COM  ', 'admin-1');
+
+      expect(supabaseFetch).toHaveBeenCalledWith('approved_scholars', {
+        method: 'POST',
+        body: { email: 'test@test.com', added_by: 'admin-1' },
+        single: true,
+      });
+      expect(result).toEqual(scholar);
+    });
+
+    it('propagates duplicate email errors', async () => {
+      supabaseFetch.mockRejectedValue(new Error('duplicate key'));
+      await expect(ShiftLogic.addApprovedScholar('x@x.com', 'admin-1')).rejects.toThrow('duplicate key');
+    });
+  });
+
+  describe('addApprovedScholarsBulk', () => {
+    it('sends POST with array of lowered/trimmed emails', async () => {
+      const result = [{ email: 'a@test.com' }, { email: 'b@test.com' }];
+      supabaseFetch.mockResolvedValue(result);
+
+      await ShiftLogic.addApprovedScholarsBulk(['  A@test.COM ', 'B@TEST.com'], 'admin-1');
+
+      expect(supabaseFetch).toHaveBeenCalledWith('approved_scholars', {
+        method: 'POST',
+        body: [
+          { email: 'a@test.com', added_by: 'admin-1' },
+          { email: 'b@test.com', added_by: 'admin-1' },
+        ],
+        headers: { 'Prefer': 'resolution=ignore-duplicates,return=representation' },
+      });
+    });
+
+    it('handles empty array', async () => {
+      supabaseFetch.mockResolvedValue([]);
+      const result = await ShiftLogic.addApprovedScholarsBulk([], 'admin-1');
+      expect(supabaseFetch.mock.calls[0][1].body).toEqual([]);
+    });
+  });
+
+  describe('removeApprovedScholar', () => {
+    it('sends DELETE for the scholar ID', async () => {
+      supabaseFetch.mockResolvedValue(undefined);
+      await ShiftLogic.removeApprovedScholar('scholar-1');
+      expect(supabaseFetch).toHaveBeenCalledWith('approved_scholars?id=eq.scholar-1', {
+        method: 'DELETE',
+      });
+    });
+
+    it('propagates errors', async () => {
+      supabaseFetch.mockRejectedValue(new Error('Forbidden'));
+      await expect(ShiftLogic.removeApprovedScholar('x')).rejects.toThrow('Forbidden');
+    });
+  });
+
   describe('getSupervisorSites', () => {
     it('fetches site_supervisors and extracts the sites objects', async () => {
       supabaseFetch.mockResolvedValue([

@@ -286,6 +286,134 @@ describe('Auth Component', () => {
   });
 
   // ═══════════════════════════════════════════
+  // ADMIN MODE TOGGLE
+  // ═══════════════════════════════════════════
+  describe('admin mode toggle', () => {
+    it('shows admin login button', () => {
+      render(<Auth />);
+      expect(screen.getByText('כניסת מנהל / מפקח אתר')).toBeInTheDocument();
+    });
+
+    it('switches to admin mode with different title', async () => {
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.click(screen.getByText(/כניסת מנהל \/ מפקח אתר/));
+
+      expect(screen.getByText('כניסת מנהל / מפקח')).toBeInTheDocument();
+      expect(screen.getByText('כניסה למערכת הניהול')).toBeInTheDocument();
+    });
+
+    it('admin mode hides register tab', async () => {
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.click(screen.getByText(/כניסת מנהל \/ מפקח אתר/));
+
+      // Register tab should not be visible in admin mode
+      expect(screen.queryByText('הרשמה')).not.toBeInTheDocument();
+    });
+
+    it('returns to student mode', async () => {
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.click(screen.getByText(/כניסת מנהל \/ מפקח אתר/));
+      // Click "back to student" button
+      await user.click(screen.getByText('חזרה לכניסת סטודנט'));
+
+      expect(screen.getByText('דיווחי שעות מלגאי מרכז קזז')).toBeInTheDocument();
+    });
+
+    it('stores admin login mode in sessionStorage on admin login', async () => {
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.click(screen.getByText(/כניסת מנהל \/ מפקח אתר/));
+      await user.type(screen.getByPlaceholderText('email@example.com'), 'admin@test.com');
+      await user.type(screen.getByPlaceholderText('••••••••'), 'pass123');
+      await user.click(screen.getByText('כניסה למערכת ניהול'));
+
+      await waitFor(() => {
+        expect(sessionStorage.getItem('kazzaz_login_mode')).toBe('admin');
+      });
+    });
+
+    it('stores student login mode in sessionStorage on student login', async () => {
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.type(screen.getByPlaceholderText('email@example.com'), 'student@test.com');
+      await user.type(screen.getByPlaceholderText('••••••••'), 'pass123');
+      await user.click(screen.getByText('כניסה למערכת'));
+
+      await waitFor(() => {
+        expect(sessionStorage.getItem('kazzaz_login_mode')).toBe('student');
+      });
+    });
+  });
+
+  // ═══════════════════════════════════════════
+  // APPROVED EMAIL CHECK (Registration Guard)
+  // ═══════════════════════════════════════════
+  describe('approved email check', () => {
+    it('rejects registration when email is not on allowlist', async () => {
+      ShiftLogic.checkApprovedEmail.mockResolvedValue(false);
+
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.click(screen.getByText('הרשמה'));
+      await user.type(screen.getByPlaceholderText('ישראל ישראלי'), 'Test User');
+      await user.type(screen.getByPlaceholderText('email@example.com'), 'unapproved@test.com');
+      await user.type(screen.getByPlaceholderText('••••••••'), 'pass123');
+      await user.click(screen.getByText('יצירת חשבון'));
+
+      await waitFor(() => {
+        expect(screen.getByText('כתובת האימייל אינה מאושרת להרשמה. פנה למנהל המערכת.')).toBeInTheDocument();
+      });
+      expect(supabase.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it('proceeds with registration when email IS on allowlist', async () => {
+      ShiftLogic.checkApprovedEmail.mockResolvedValue(true);
+
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.click(screen.getByText('הרשמה'));
+      await user.type(screen.getByPlaceholderText('ישראל ישראלי'), 'Test User');
+      await user.type(screen.getByPlaceholderText('email@example.com'), 'approved@test.com');
+      await user.type(screen.getByPlaceholderText('••••••••'), 'pass123');
+      await user.click(screen.getByText('יצירת חשבון'));
+
+      await waitFor(() => {
+        expect(ShiftLogic.checkApprovedEmail).toHaveBeenCalledWith('approved@test.com');
+        expect(supabase.auth.signUp).toHaveBeenCalled();
+      });
+    });
+
+    it('shows timeout error on slow network', async () => {
+      ShiftLogic.checkApprovedEmail.mockImplementation(() =>
+        new Promise((_, reject) => setTimeout(() => reject(new Error('__TIMEOUT__')), 50))
+      );
+
+      const user = userEvent.setup();
+      render(<Auth />);
+
+      await user.click(screen.getByText('הרשמה'));
+      await user.type(screen.getByPlaceholderText('ישראל ישראלי'), 'Test');
+      await user.type(screen.getByPlaceholderText('email@example.com'), 'test@test.com');
+      await user.type(screen.getByPlaceholderText('••••••••'), 'pass123');
+      await user.click(screen.getByText('יצירת חשבון'));
+
+      await waitFor(() => {
+        expect(screen.getByText('שגיאת תקשורת — נסה שוב')).toBeInTheDocument();
+      });
+    });
+  });
+
+  // ═══════════════════════════════════════════
   // PASSWORD TOGGLE
   // ═══════════════════════════════════════════
   describe('password visibility', () => {
